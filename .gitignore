@@ -34,3 +34,5 @@ build/
 
 ### Obsidian ###
 documents/.obsidian/
+.obsidian/
+3_documents/.obsidian/

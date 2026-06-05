@@ -1,6 +1,6 @@
-# CodeMate
+# 🦄CodeMate
 
-개발자를 위한 스터디 및 모각코 모집·참여 관리 백엔드 API 프로젝트입니다.
+개발자를 위한 스터디(프로젝트 형태) 및 모각코(모여서 각자 코딩, 원데이 스터디) 모집·참여 관리 백엔드 API 프로젝트입니다.
 
 단순한 모집 게시판을 넘어 회원 인증, 참여 신청, 방장 승인·거절, 모집 인원 관리 등 실제 스터디 운영 과정에서 필요한 비즈니스 흐름을 구현합니다.
 
@@ -104,9 +104,9 @@ Authorization: Bearer {accessToken}
 
 ## 문서
 
-- [프로젝트 개발 기록](documents/PROJECT_LOG.md)
-- [Postman 실행 가이드](documents/Postman_실행_가이드.md)
-- [백엔드 프로젝트 기획](documents/Backend_Project_기획.md)
+- [프로젝트 개발 기록](3_documents/PROJECT_LOG.md)
+- [Postman 실행 가이드](3_documents/Postman_실행_가이드.md)
+- [백엔드 프로젝트 기획](3_documents/Backend_Project_기획.md)
 
 ## 향후 계획
 
@@ -115,3 +115,6 @@ Authorization: Bearer {accessToken}
 - MySQL 환경 프로필 분리
 - Docker 기반 실행 환경 구성
 - 동시 승인 상황의 모집 정원 정합성 보강
+
+---
+*Updated at_2026.06.05*
