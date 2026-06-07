@@ -9,14 +9,16 @@
 - Spring Security와 JWT 기반 회원가입·로그인
 - 로그인 사용자 정보 조회
 - 스터디 및 모각코 모집 글 CRUD
-- 카테고리·모집 상태 기반 목록 조회와 페이징
+- 키워드·카테고리·모집 상태·진행 방식·지역·기술 스택 기반 검색과 페이징
 - 기술 스택 등록 및 스터디 연결
 - 스터디 참여 신청과 중복 신청 방지
 - 방장의 참여 신청 목록 조회
 - 참여 신청 승인·거절
 - 승인 시 현재 인원 증가
 - 정원 도달 시 모집 상태 자동 마감
+- 동시 승인 시 비관적 락을 통한 모집 정원 초과 방지
 - 인증·인가 및 비즈니스 예외 응답 형식 통일
+- Swagger UI와 OpenAPI 기반 API 문서화
 
 ## 기술 스택
 
@@ -30,6 +32,7 @@
 | Database | H2, MySQL Driver |
 | Build | Maven, Maven Wrapper |
 | Test | JUnit 5, MockMvc, Spring Security Test |
+| API Docs | springdoc-openapi, Swagger UI |
 
 ## 주요 도메인
 
@@ -79,6 +82,24 @@ $env:CODEMATE_JWT_SECRET="Base64로 인코딩된 JWT Secret"
 
 H2는 인메모리 데이터베이스이므로 서버를 종료하면 저장된 데이터가 초기화됩니다.
 
+## Swagger/OpenAPI
+
+서버 실행 후 아래 주소에서 API 명세를 확인하고 직접 요청할 수 있습니다.
+
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
+JWT 인증이 필요한 API 테스트 순서:
+
+1. `POST /api/users/signup`으로 회원가입
+2. `POST /api/users/login`으로 로그인
+3. 응답의 `data.accessToken` 복사
+4. Swagger UI 상단 `Authorize` 클릭
+5. 토큰 값만 입력하고 인증
+6. 자물쇠 표시가 있는 API 실행
+
+`Bearer ` 접두사는 Swagger UI가 자동으로 추가하므로 access token 값만 입력합니다.
+
 ## 대표 API
 
 | Method | Endpoint | 설명 | 인증 |
@@ -102,6 +123,21 @@ H2는 인메모리 데이터베이스이므로 서버를 종료하면 저장된 
 Authorization: Bearer {accessToken}
 ```
 
+스터디 목록은 검색 조건을 자유롭게 조합할 수 있습니다.
+
+```http
+GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
+```
+
+지원 조건:
+
+- `keyword`: 제목 또는 내용 부분 검색
+- `category`: `STUDY`, `MOGAKKO`
+- `status`: `RECRUITING`, `CLOSED`, `IN_PROGRESS`, `FINISHED`
+- `meetingType`: `ONLINE`, `OFFLINE`
+- `location`: 지역 부분 검색
+- `techStack`: 기술 스택 이름 부분 검색
+
 ## 문서
 
 - [프로젝트 개발 기록](3_documents/PROJECT_LOG.md)
@@ -110,11 +146,8 @@ Authorization: Bearer {accessToken}
 
 ## 향후 계획
 
-- 기술 스택·지역 기반 검색 조건 확장
-- Swagger/OpenAPI 문서화
 - MySQL 환경 프로필 분리
 - Docker 기반 실행 환경 구성
-- 동시 승인 상황의 모집 정원 정합성 보강
 
 ---
 *Updated at_2026.06.05*

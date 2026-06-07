@@ -1234,3 +1234,271 @@ BUILD SUCCESS
 2. Swagger 문서화 추가
 3. MySQL profile 분리
 4. 테스트용 SQL 로그 정리
+
+---
+
+## 2026-06-07 - Study 복합 검색 필터 구현
+
+### 1. 검색 조건 확장
+
+- `GET /api/studies`에서 다음 Query Parameter를 조합해 사용할 수 있도록 확장.
+  - `keyword`: 제목 또는 내용 부분 검색
+  - `category`: `STUDY`, `MOGAKKO`
+  - `status`: `RECRUITING`, `CLOSED`, `IN_PROGRESS`, `FINISHED`
+  - `meetingType`: `ONLINE`, `OFFLINE`
+  - `location`: 지역 부분 검색
+  - `techStack`: 기술 스택 이름 부분 검색
+  - `page`, `size`: 페이징
+
+### 2. 동적 검색 구조
+
+- `StudySearchCondition`을 추가해 검색 입력값을 하나의 객체로 전달.
+- `StudyRepository`에 `JpaSpecificationExecutor` 적용.
+- `StudySpecifications`에서 값이 있는 조건만 동적으로 Predicate에 추가.
+- 기술 스택 검색은 `StudyTechStack`을 대상으로 한 `exists` 서브쿼리로 처리.
+- 빈 문자열 검색 조건은 적용하지 않음.
+- 지역과 기술 스택은 대소문자를 구분하지 않는 부분 검색으로 처리.
+
+### 3. 검색 요청 예시
+
+```http
+GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
+```
+
+### 4. 테스트
+
+- 서로 다른 카테고리, 진행 방식, 지역, 기술 스택을 가진 모집 글 생성.
+- 키워드, 카테고리, 상태, 진행 방식, 지역, 기술 스택을 모두 조합해 조회.
+- 모든 조건을 만족하는 모집 글 하나만 반환되는지 검증.
+
+### 5. 다음 작업 후보
+
+1. Swagger/OpenAPI 문서화
+2. 동시 승인 상황의 모집 정원 정합성 보강
+3. MySQL profile 분리
+4. 목록 조회 N+1 쿼리 최적화
+
+---
+
+## 2026-06-07 - 동시 승인 모집 정원 초과 방지
+
+### 1. 문제 상황
+
+- 모집 가능 인원이 한 자리 남은 상태에서 두 승인 요청이 동시에 실행되면 두 트랜잭션이 같은 `currentMemberCount`를 읽을 수 있었다.
+- 기존 로직은 조회 후 애플리케이션에서 정원을 검사했기 때문에, 요청 타이밍에 따라 모집 정원을 초과할 가능성이 있었다.
+
+### 2. 비관적 락 적용
+
+- `StudyRepository.findByIdForUpdate()` 추가.
+- `@Lock(LockModeType.PESSIMISTIC_WRITE)`를 적용해 승인 시 Study 행을 쓰기 잠금으로 조회.
+- 승인 트랜잭션이 끝날 때까지 동일한 Study의 다른 승인 요청이 기다리도록 처리.
+- 대기하던 요청은 첫 승인 커밋 후 최신 인원을 읽고 `STUDY_CAPACITY_FULL` 검증을 수행.
+
+### 3. 적용 범위
+
+- 참여 신청 승인 API에만 비관적 락 적용.
+- 일반 목록/상세 조회와 참여 신청, 거절 요청에는 기존 조회 방식을 유지.
+- 동일 스터디의 승인 요청만 직렬화되며 서로 다른 스터디 승인은 독립적으로 처리.
+
+### 4. 병렬 통합 테스트
+
+- 방장을 포함해 최대 인원이 2명인 스터디 생성.
+- 서로 다른 신청자 두 명이 `PENDING` 상태로 참여 신청.
+- 두 스레드가 같은 시점에 각각 승인 로직을 호출.
+- 승인 성공 1건과 `STUDY_CAPACITY_FULL` 실패 1건 확인.
+- 최종 `currentMemberCount=2`, `status=CLOSED` 확인.
+- 실행 SQL에서 `select ... for update` 적용 확인.
+
+### 5. 다음 작업 후보
+
+1. Swagger/OpenAPI 문서화
+2. MySQL profile 분리
+3. 목록 조회 N+1 쿼리 최적화
+4. 테스트 SQL 로그 분리
+
+---
+
+## 2026-06-07 - Swagger/OpenAPI 문서화
+
+### 1. springdoc 의존성 추가
+
+- Spring Boot 4.0.6과 호환되는 `springdoc-openapi-starter-webmvc-ui:3.0.3` 추가.
+- Swagger UI와 OpenAPI JSON을 자동 생성하도록 구성.
+
+### 2. OpenAPI 기본 정보 및 JWT 설정
+
+- `OpenApiConfig` 추가.
+- 문서 제목: `CodeMate API`
+- 문서 버전: `v1`
+- HTTP Bearer 방식의 `bearerAuth` 보안 스키마 추가.
+- Swagger UI의 `Authorize`에서 access token만 입력하면 JWT Header가 적용되도록 구성.
+
+### 3. Security 공개 경로
+
+- 다음 문서 경로를 인증 없이 접근할 수 있도록 허용.
+  - `/swagger-ui/**`
+  - `/swagger-ui.html`
+  - `/v3/api-docs/**`
+
+### 4. API 설명 추가
+
+- Controller별 태그 추가:
+  - `Users`
+  - `Studies`
+  - `Study Members`
+- 각 API에 기능 요약과 상세 설명 추가.
+- 주요 성공 및 실패 HTTP 상태 코드 설명 추가.
+- 인증이 필요한 API에 `bearerAuth` 보안 요구사항 표시.
+- 참여 승인 API에 비관적 락 기반 정원 보호 동작 설명.
+
+### 5. Swagger UI 설정
+
+- 태그 이름 알파벳 정렬.
+- 같은 태그의 API를 HTTP Method 기준으로 정렬.
+
+### 6. 테스트
+
+- 비로그인 상태에서 `/v3/api-docs`가 200 응답인지 검증.
+- 문서 제목과 `bearerAuth` 설정 검증.
+- 로그인, 스터디 목록, 참여 승인 경로가 OpenAPI JSON에 포함되는지 검증.
+
+### 7. 접속 주소
+
+```text
+Swagger UI: http://localhost:8080/swagger-ui/index.html
+OpenAPI JSON: http://localhost:8080/v3/api-docs
+```
+
+### 8. 다음 작업 후보
+
+1. MySQL profile 분리
+2. 목록 조회 N+1 쿼리 최적화
+3. Dockerfile 및 Docker Compose 구성
+4. 테스트 SQL 로그 분리
+
+---
+
+## 2026-06-07 - Postman 참여 승인 테스트 트러블슈팅
+
+### 1. 테스트 목적
+
+- 방장 계정으로 스터디 생성.
+- 신청자 계정으로 참여 신청.
+- 방장 계정으로 신청 목록 조회 및 참여 승인.
+- JWT 인증, 환경 변수, 참여 신청 ID 전달이 실제 클라이언트에서도 올바르게 동작하는지 확인.
+
+### 2. 발생한 문제
+
+#### 동일 계정으로 신청
+
+- 방장 계정이 계속 로그인된 상태에서 본인 스터디에 참여 신청.
+- `본인이 만든 스터디에는 참여 신청할 수 없습니다.` 응답 발생.
+
+원인:
+
+- 로그인 요청 Body를 주석 처리하며 바꾸는 과정에서 실제 로그인 계정이 기대와 달랐다.
+
+해결:
+
+- 로그인 요청을 `방장 로그인 요청`, `신청자 로그인 요청`으로 분리.
+- 로그인할 때마다 Post-response에서 `accessToken` 환경 변수를 자동 교체.
+- `/api/users/me`로 현재 로그인 계정을 확인.
+
+#### 인증 요청에서 401 발생
+
+- 방장으로 로그인했지만 신청 목록 및 승인 API에서 `로그인이 필요합니다.` 응답 발생.
+
+원인:
+
+- 일부 요청의 Authorization이 `No Auth`로 설정됨.
+- Authorization 탭과 Headers 탭에 인증값을 중복 설정.
+- 환경 변수 대신 `Bearer {{accessToken}}` 문자열이 그대로 전달될 가능성을 점검해야 했음.
+
+해결:
+
+- Collection에 `Bearer Token {{accessToken}}` 공통 인증 설정.
+- 인증 필요 요청은 `Inherit auth from parent` 사용.
+- 직접 추가한 Authorization Header 삭제.
+- Postman Console에서 실제 Request Header 확인.
+- `/api/users/me`가 200인지 먼저 확인해 토큰 문제와 방장 권한 문제를 분리.
+
+#### memberId가 비어 있는 승인 요청
+
+Postman Console:
+
+```text
+PATCH /api/studies/7/members//approve
+```
+
+원인:
+
+- 이미 참여 신청한 사용자가 다시 신청해 `409 Conflict` 응답 발생.
+- 실패 응답에는 `data`가 없지만 Post-response에서 `json.data.id`에 무조건 접근.
+- `TypeError: Cannot read properties of undefined (reading 'id')` 발생.
+- `memberId` 환경 변수가 저장되지 않아 승인 URL 경로가 비어 있음.
+
+해결:
+
+- 성공 응답일 때만 값을 저장하는 방어적 Post-response 스크립트 적용.
+
+```javascript
+const json = pm.response.json();
+
+if (json.success && json.data?.id) {
+    pm.environment.set("memberId", json.data.id);
+}
+```
+
+- 이미 신청된 데이터는 방장 토큰으로 `GET /api/studies/{studyId}/members?status=PENDING` 조회.
+- 목록의 첫 번째 신청 ID를 `memberId`로 저장.
+
+```javascript
+const json = pm.response.json();
+
+if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+    pm.environment.set("memberId", json.data[0].id);
+}
+```
+
+#### Query Parameter에 줄바꿈 포함
+
+Postman Console:
+
+```text
+GET /api/studies/7/members?status=PENDING%0A
+```
+
+원인:
+
+- Params 값 끝에 보이지 않는 줄바꿈 문자가 포함됨.
+
+해결:
+
+- Params 탭에서 값을 삭제하고 `PENDING`을 다시 직접 입력.
+
+### 3. 최종 성공 흐름
+
+1. 방장 로그인 후 `accessToken` 저장.
+2. 방장 토큰으로 스터디 생성 후 `studyId` 저장.
+3. 신청자 로그인으로 토큰 교체.
+4. 신청자 토큰으로 참여 신청 후 `memberId` 저장.
+5. 방장 로그인으로 토큰 교체.
+6. `/api/users/me`로 방장 계정 확인.
+7. 방장 토큰으로 신청 목록 조회.
+8. `PATCH /api/studies/{studyId}/members/{memberId}/approve` 실행.
+9. HTTP 200, `status=APPROVED` 확인.
+
+최종 확인 값:
+
+```text
+studyId=7
+memberId=3
+status=APPROVED
+```
+
+### 4. 정리
+
+- `401`은 JWT 전달 문제, `403`은 방장 권한 문제로 구분해서 확인한다.
+- 환경 변수는 실패 응답에서 덮어쓰지 않도록 성공 조건을 검사한다.
+- 동적 URL에 사용되는 `studyId`, `memberId`는 Console의 실제 요청 URL로 검증한다.
+- 계정 전환이 많은 테스트는 요청을 계정별로 분리해 실수를 줄인다.

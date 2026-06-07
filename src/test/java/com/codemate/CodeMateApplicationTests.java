@@ -1,6 +1,20 @@
 package com.codemate;
 
+import com.codemate.domain.study.entity.Study;
+import com.codemate.domain.study.entity.StudyStatus;
+import com.codemate.domain.study.repository.StudyRepository;
+import com.codemate.domain.studymember.dto.StudyMemberResponse;
+import com.codemate.domain.studymember.service.StudyMemberService;
+import com.codemate.domain.user.repository.UserRepository;
+import com.codemate.global.exception.BusinessException;
+import com.codemate.global.exception.ErrorCode;
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -24,8 +39,29 @@ class CodeMateApplicationTests {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private StudyMemberService studyMemberService;
+
+    @Autowired
+    private StudyRepository studyRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void openApiDocs() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("CodeMate API"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.paths['/api/users/login'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/studies'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/{memberId}/approve'].patch").exists());
     }
 
     @Test
@@ -133,6 +169,57 @@ class CodeMateApplicationTests {
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void searchStudiesWithCombinedFilters() throws Exception {
+        signup("search-host@example.com", "search-host", "Kotlin");
+        String accessToken = login("search-host@example.com");
+
+        createStudy(
+                accessToken,
+                "검색전용 Kotlin 스터디",
+                "코루틴과 Spring을 함께 학습합니다.",
+                "STUDY",
+                "OFFLINE",
+                "판교 테크노밸리",
+                "[\"Kotlin\", \"Spring Boot\"]"
+        );
+        createStudy(
+                accessToken,
+                "검색전용 Java 스터디",
+                "JPA 성능 최적화를 학습합니다.",
+                "STUDY",
+                "OFFLINE",
+                "판교 테크노밸리",
+                "[\"Java\", \"JPA\"]"
+        );
+        createStudy(
+                accessToken,
+                "검색전용 Kotlin 모각코",
+                "코루틴 코드를 각자 작성합니다.",
+                "MOGAKKO",
+                "ONLINE",
+                "Discord",
+                "[\"Kotlin\"]"
+        );
+
+        mockMvc.perform(get("/api/studies")
+                        .param("keyword", "코루틴")
+                        .param("category", "STUDY")
+                        .param("status", "RECRUITING")
+                        .param("meetingType", "OFFLINE")
+                        .param("location", "판교")
+                        .param("techStack", "kot")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.items[0].title").value("검색전용 Kotlin 스터디"))
+                .andExpect(jsonPath("$.data.items[0].meetingType").value("OFFLINE"))
+                .andExpect(jsonPath("$.data.items[0].location").value("판교 테크노밸리"))
+                .andExpect(jsonPath("$.data.items[0].techStackNames[0]").value("Kotlin"));
     }
 
     @Test
@@ -251,6 +338,54 @@ class CodeMateApplicationTests {
     }
 
     @Test
+    void concurrentApprovalsDoNotExceedStudyCapacity() throws Exception {
+        signup("concurrent-host@example.com", "concurrent-host", "Spring Boot");
+        signup("concurrent-applicant-1@example.com", "concurrent-applicant-1", "JPA");
+        signup("concurrent-applicant-2@example.com", "concurrent-applicant-2", "Kotlin");
+
+        String hostToken = login("concurrent-host@example.com");
+        String applicantToken1 = login("concurrent-applicant-1@example.com");
+        String applicantToken2 = login("concurrent-applicant-2@example.com");
+
+        Integer studyId = createStudy(hostToken, 2);
+        Integer memberId1 = applyStudy(studyId, applicantToken1);
+        Integer memberId2 = applyStudy(studyId, applicantToken2);
+        Long hostId = userRepository.findByEmail("concurrent-host@example.com")
+                .orElseThrow()
+                .getId();
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            List<Future<ApprovalResult>> futures = List.of(
+                    executor.submit(approveAtSameTime(ready, start, hostId, studyId.longValue(), memberId1.longValue())),
+                    executor.submit(approveAtSameTime(ready, start, hostId, studyId.longValue(), memberId2.longValue()))
+            );
+
+            ready.await();
+            start.countDown();
+
+            List<ApprovalResult> results = futures.stream()
+                    .map(this::getFutureResult)
+                    .toList();
+
+            assertThat(results).filteredOn(ApprovalResult::approved).hasSize(1);
+            assertThat(results)
+                    .filteredOn(result -> result.errorCode() == ErrorCode.STUDY_CAPACITY_FULL)
+                    .hasSize(1);
+
+            Study study = studyRepository.findById(studyId.longValue()).orElseThrow();
+            assertThat(study.getCurrentMemberCount()).isEqualTo(2);
+            assertThat(study.isFull()).isTrue();
+            assertThat(study.getStatus()).isEqualTo(StudyStatus.CLOSED);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void rejectStudyMember() throws Exception {
         signup("reject-host@example.com", "reject-host", "Spring Boot");
         signup("reject-applicant@example.com", "reject-applicant", "JPA");
@@ -336,6 +471,37 @@ class CodeMateApplicationTests {
         return JsonPath.read(createResult.getResponse().getContentAsString(), "$.data.id");
     }
 
+    private Integer createStudy(
+            String accessToken,
+            String title,
+            String content,
+            String category,
+            String meetingType,
+            String location,
+            String techStackNames
+    ) throws Exception {
+        String requestBody = """
+                {
+                  "title": "%s",
+                  "content": "%s",
+                  "category": "%s",
+                  "meetingType": "%s",
+                  "location": "%s",
+                  "maxMemberCount": 4,
+                  "techStackNames": %s
+                }
+                """.formatted(title, content, category, meetingType, location, techStackNames);
+
+        MvcResult createResult = mockMvc.perform(post("/api/studies")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        return JsonPath.read(createResult.getResponse().getContentAsString(), "$.data.id");
+    }
+
     private Integer applyStudy(Integer studyId, String accessToken) throws Exception {
         MvcResult applyResult = mockMvc.perform(post("/api/studies/" + studyId + "/members")
                         .header("Authorization", "Bearer " + accessToken))
@@ -343,5 +509,36 @@ class CodeMateApplicationTests {
                 .andReturn();
 
         return JsonPath.read(applyResult.getResponse().getContentAsString(), "$.data.id");
+    }
+
+    private Callable<ApprovalResult> approveAtSameTime(
+            CountDownLatch ready,
+            CountDownLatch start,
+            Long hostId,
+            Long studyId,
+            Long memberId
+    ) {
+        return () -> {
+            ready.countDown();
+            start.await();
+
+            try {
+                StudyMemberResponse response = studyMemberService.approve(hostId, studyId, memberId);
+                return new ApprovalResult(response.status().name().equals("APPROVED"), null);
+            } catch (BusinessException exception) {
+                return new ApprovalResult(false, exception.getErrorCode());
+            }
+        };
+    }
+
+    private ApprovalResult getFutureResult(Future<ApprovalResult> future) {
+        try {
+            return future.get();
+        } catch (Exception exception) {
+            throw new AssertionError("동시 승인 작업 실행에 실패했습니다.", exception);
+        }
+    }
+
+    private record ApprovalResult(boolean approved, ErrorCode errorCode) {
     }
 }

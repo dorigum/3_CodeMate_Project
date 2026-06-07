@@ -57,7 +57,7 @@ public class StudyMemberService {
 
     @Transactional
     public StudyMemberResponse approve(Long hostId, Long studyId, Long memberId) {
-        Study study = findStudy(studyId);
+        Study study = findStudyForUpdate(studyId);
         validateHost(study, hostId);
 
         StudyMember studyMember = findStudyMember(memberId);
@@ -108,6 +108,11 @@ public class StudyMemberService {
 
     private Study findStudy(Long studyId) {
         return studyRepository.findById(studyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_NOT_FOUND));
+    }
+
+    private Study findStudyForUpdate(Long studyId) {
+        return studyRepository.findByIdForUpdate(studyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_NOT_FOUND));
     }
 

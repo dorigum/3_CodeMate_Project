@@ -2,12 +2,13 @@ package com.codemate.domain.study.service;
 
 import com.codemate.domain.study.dto.StudyCreateRequest;
 import com.codemate.domain.study.dto.StudyResponse;
+import com.codemate.domain.study.dto.StudySearchCondition;
 import com.codemate.domain.study.dto.StudySummaryResponse;
 import com.codemate.domain.study.dto.StudyUpdateRequest;
 import com.codemate.domain.study.entity.Study;
-import com.codemate.domain.study.entity.StudyCategory;
 import com.codemate.domain.study.entity.StudyStatus;
 import com.codemate.domain.study.repository.StudyRepository;
+import com.codemate.domain.study.repository.StudySpecifications;
 import com.codemate.domain.techstack.entity.StudyTechStack;
 import com.codemate.domain.techstack.entity.TechStack;
 import com.codemate.domain.techstack.repository.StudyTechStackRepository;
@@ -58,8 +59,8 @@ public class StudyService {
         return StudyResponse.from(savedStudy, getTechStackNames(savedStudy));
     }
 
-    public Page<StudySummaryResponse> getStudies(StudyCategory category, StudyStatus status, Pageable pageable) {
-        return findStudies(category, status, pageable)
+    public Page<StudySummaryResponse> getStudies(StudySearchCondition condition, Pageable pageable) {
+        return studyRepository.findAll(StudySpecifications.withCondition(condition), pageable)
                 .map(study -> StudySummaryResponse.from(study, getTechStackNames(study)));
     }
 
@@ -94,22 +95,6 @@ public class StudyService {
         validateHost(study, userId);
         studyTechStackRepository.deleteAllByStudy(study);
         studyRepository.delete(study);
-    }
-
-    private Page<Study> findStudies(StudyCategory category, StudyStatus status, Pageable pageable) {
-        if (category != null && status != null) {
-            return studyRepository.findAllByCategoryAndStatus(category, status, pageable);
-        }
-
-        if (category != null) {
-            return studyRepository.findAllByCategory(category, pageable);
-        }
-
-        if (status != null) {
-            return studyRepository.findAllByStatus(status, pageable);
-        }
-
-        return studyRepository.findAll(pageable);
     }
 
     private Study findStudy(Long studyId) {
