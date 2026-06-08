@@ -50,6 +50,8 @@
 
 ### 서버 실행
 
+별도 프로필을 지정하지 않으면 기본 `h2` 프로필로 실행됩니다.
+
 ```powershell
 git clone https://github.com/dorigum/3_CodeMate.git
 cd 3_CodeMate
@@ -82,6 +84,42 @@ $env:CODEMATE_JWT_SECRET="Base64로 인코딩된 JWT Secret"
 
 H2는 인메모리 데이터베이스이므로 서버를 종료하면 저장된 데이터가 초기화됩니다.
 
+## MySQL 실행
+
+먼저 MySQL에 데이터베이스와 사용자를 준비합니다.
+
+```sql
+CREATE DATABASE codemate
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'codemate'@'%' IDENTIFIED BY '비밀번호';
+GRANT ALL PRIVILEGES ON codemate.* TO 'codemate'@'%';
+FLUSH PRIVILEGES;
+```
+
+PowerShell에서 접속 정보를 환경변수로 설정하고 `mysql` 프로필을 활성화합니다.
+
+```powershell
+$env:CODEMATE_DB_HOST="localhost"
+$env:CODEMATE_DB_PORT="3306"
+$env:CODEMATE_DB_NAME="codemate"
+$env:CODEMATE_DB_USERNAME="codemate"
+$env:CODEMATE_DB_PASSWORD="비밀번호"
+
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
+```
+
+기본값:
+
+- Host: `localhost`
+- Port: `3306`
+- Database: `codemate`
+- Username: `codemate`
+- Password: 기본값 없음, `CODEMATE_DB_PASSWORD` 필수
+
+MySQL 프로필에서는 H2 Console이 비활성화됩니다.
+
 ## Swagger/OpenAPI
 
 서버 실행 후 아래 주소에서 API 명세를 확인하고 직접 요청할 수 있습니다.
@@ -107,6 +145,7 @@ JWT 인증이 필요한 API 테스트 순서:
 | `POST` | `/api/users/signup` | 회원가입 | 불필요 |
 | `POST` | `/api/users/login` | 로그인 및 JWT 발급 | 불필요 |
 | `GET` | `/api/users/me` | 내 정보 조회 | 필요 |
+| `GET` | `/api/users/me/study-applications` | 내 참여 신청 및 처리 상태 조회 | 필요 |
 | `POST` | `/api/studies` | 모집 글 생성 | 필요 |
 | `GET` | `/api/studies` | 모집 글 목록 조회 | 불필요 |
 | `GET` | `/api/studies/{studyId}` | 모집 글 상세 조회 | 불필요 |
@@ -141,13 +180,12 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 ## 문서
 
 - [프로젝트 개발 기록](3_documents/PROJECT_LOG.md)
-- [Postman 실행 가이드](3_documents/Postman_실행_가이드.md)
+- [CodeMate 실행 가이드](3_documents/CodeMate_실행_가이드.md)
 - [백엔드 프로젝트 기획](3_documents/Backend_Project_기획.md)
 
 ## 향후 계획
 
-- MySQL 환경 프로필 분리
 - Docker 기반 실행 환경 구성
 
 ---
-*Updated at_2026.06.05*
+*Updated at_2026.06.08*

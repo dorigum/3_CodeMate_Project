@@ -1875,3 +1875,166 @@ GET /api/users/me/study-applications?status=REJECTED
 4. 내 신청 내역 전체 및 상태별 조회 테스트.
 5. 거절 후 재신청 및 중복 신청 차단 테스트.
 6. Maven 전체 테스트 `16개` 통과.
+
+
+---
+## 2026-06-08 - H2/MySQL 프로필 분리
+
+### 1. 공통 설정 분리
+
+1. `application.properties`
+   - 애플리케이션 이름.
+   - 기본 활성 프로필 `h2`.
+   - JPA 공통 설정.
+   - JWT 설정.
+   - Swagger UI 설정.
+
+2. 기본 프로필
+
+```properties
+spring.profiles.default=h2
+```
+
+- 별도 프로필 없이 실행하면 기존과 동일하게 H2 인메모리 DB 사용.
+- 테스트와 빠른 로컬 개발 흐름 유지.
+
+### 2. H2 프로필
+
+설정 파일:
+
+```text
+src/main/resources/application-h2.properties
+```
+
+주요 설정:
+
+1. H2 인메모리 데이터베이스 사용.
+2. MySQL 호환 모드 적용.
+3. H2 Console 활성화.
+4. Hibernate `ddl-auto=update` 적용.
+
+실행:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+### 3. MySQL 프로필
+
+설정 파일:
+
+```text
+src/main/resources/application-mysql.properties
+```
+
+환경변수:
+
+| 환경변수 | 기본값 | 설명 |
+|---|---|---|
+| `CODEMATE_DB_HOST` | `localhost` | MySQL 호스트 |
+| `CODEMATE_DB_PORT` | `3306` | MySQL 포트 |
+| `CODEMATE_DB_NAME` | `codemate` | 데이터베이스 이름 |
+| `CODEMATE_DB_USERNAME` | `codemate` | 접속 계정 |
+| `CODEMATE_DB_PASSWORD` | 없음 | 접속 비밀번호, 필수 |
+
+실행:
+
+```powershell
+$env:CODEMATE_DB_HOST="localhost"
+$env:CODEMATE_DB_PORT="3306"
+$env:CODEMATE_DB_NAME="codemate"
+$env:CODEMATE_DB_USERNAME="codemate"
+$env:CODEMATE_DB_PASSWORD="비밀번호"
+
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
+```
+
+### 4. 프로필별 차이
+
+| 항목 | `h2` | `mysql` |
+|---|---|---|
+| 용도 | 테스트 및 빠른 로컬 개발 | 실제 MySQL 연동 개발 |
+| 데이터 유지 | 서버 종료 시 초기화 | MySQL 볼륨 또는 서버에 유지 |
+| H2 Console | 활성화 | 비활성화 |
+| 비밀번호 | 빈 값 | 환경변수 필수 |
+| DDL | `update` | `update` |
+
+### 5. 보안 및 운영 기준
+
+1. DB 비밀번호를 Git 추적 파일에 저장하지 않음.
+2. MySQL 비밀번호는 `CODEMATE_DB_PASSWORD`로만 전달.
+3. 현재 `ddl-auto=update`는 로컬 개발 단계 기준.
+4. 운영 배포 전 Flyway 적용 후 `ddl-auto=validate` 전환 예정.
+
+### 6. 검증
+
+1. 기본 프로필이 H2 설정을 로딩하는지 테스트.
+2. MySQL 환경변수가 JDBC URL과 계정 설정에 반영되는지 테스트.
+3. MySQL 프로필에서 H2 Console이 비활성화되는지 테스트.
+4. 기존 통합 테스트가 기본 H2 프로필에서 정상 동작하는지 전체 확인.
+
+### 7. 실제 MySQL 연동 검증
+
+1. MySQL 준비
+   - 로컬 MySQL 서버의 기존 Connection 사용.
+   - `codemate` 데이터베이스 생성.
+   - 프로젝트 전용 `codemate` 계정과 데이터베이스 권한 설정.
+
+2. 터미널 환경 확인
+   - PowerShell에서는 `$env:CODEMATE_DB_USERNAME="codemate"` 형식 사용.
+   - 명령 프롬프트(cmd)에서는 `set CODEMATE_DB_USERNAME=codemate` 형식 사용.
+   - cmd에서 PowerShell의 `$env:` 문법을 사용하면 파일 이름 또는 디렉터리 이름 구문 오류가 발생하는 점 확인.
+
+3. MySQL 프로필 실행
+
+```cmd
+set CODEMATE_DB_USERNAME=codemate
+set CODEMATE_DB_PASSWORD=비밀번호
+mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
+```
+
+4. 데이터 저장 확인
+   - 회원가입 데이터가 `users` 테이블에 저장됨.
+   - 스터디 모집 글이 `study` 테이블에 저장됨.
+   - 기술 스택과 연결 정보가 `tech_stacks`, `study_tech_stacks`에 저장됨.
+   - 참여 신청 정보가 `study_members`에 저장됨.
+
+5. 데이터 영속성 확인
+   - MySQL 프로필 서버 종료.
+   - 동일한 MySQL 프로필로 서버 재실행.
+   - 기존 계정 로그인 성공.
+   - 이전에 생성한 스터디 데이터 유지 확인.
+
+6. 참여 신청 흐름 확인
+   - 사용자 참여 신청.
+   - 방장 신청 거절.
+   - 거절된 사용자의 동일 스터디 재신청.
+   - 방장의 재신청 승인.
+   - 내 신청 내역에서 최종 `APPROVED` 상태 확인.
+
+7. 검증 결과
+   - H2가 아닌 실제 MySQL 환경에서도 핵심 API 정상 동작.
+   - 서버 재시작 이후 데이터 유지.
+   - 거절 → 재신청 → 승인 상태 전환 정상 동작.
+
+### 8. 실행 가이드 통합
+
+1. 문서 파일명 변경
+
+```text
+Postman_실행_가이드.md
+→ CodeMate_실행_가이드.md
+```
+
+2. 변경 이유
+   - 기존 문서가 Postman 요청 예시뿐 아니라 Swagger, H2, MySQL, 서버 실행 방법까지 포함.
+   - 실제 문서 범위와 파일 제목을 일치시키기 위해 통합 실행 가이드로 변경.
+
+3. 문서 구성
+   - 서버 테스트.
+   - Postman 및 Swagger API 테스트.
+   - H2/MySQL 데이터베이스 테스트.
+   - 서버 재시작과 데이터 영속성 테스트.
+   - 참여 신청 거절, 재신청, 승인 테스트.
+
+4. README 문서 링크를 새 파일명으로 변경.

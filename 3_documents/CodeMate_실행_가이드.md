@@ -1,4 +1,23 @@
-# CodeMate Postman 실행 가이드
+# CodeMate 실행 가이드
+
+이 문서는 CodeMate 서버 실행과 데이터베이스 연결, Swagger/Postman API 테스트를 한 곳에서 확인하기 위한 통합 가이드이다.
+
+## 문서 구성
+
+1. 서버 테스트
+   - H2 기본 프로필 실행
+   - MySQL 프로필 실행
+   - 서버와 Swagger 동작 확인
+2. Postman 및 Swagger API 테스트
+   - 회원가입과 로그인
+   - JWT 인증
+   - 스터디 CRUD
+   - 참여 신청, 승인, 거절, 재신청
+   - 내 신청 상태 조회
+3. 데이터베이스 테스트
+   - H2 Console 확인
+   - MySQL 테이블과 저장 데이터 확인
+   - 서버 재시작 후 데이터 영속성 확인
 
 ## 1. 서버 실행
 
@@ -10,9 +29,43 @@ cd C:\KOSTA_Projects\3_CodeMate
 
 ### 1.2 서버 실행
 
+기본 H2 프로필:
+
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
+
+MySQL 프로필은 사용하는 터미널에 맞는 문법으로 환경변수를 설정한다.
+
+PowerShell:
+
+```powershell
+$env:CODEMATE_DB_HOST="localhost"
+$env:CODEMATE_DB_PORT="3306"
+$env:CODEMATE_DB_NAME="codemate"
+$env:CODEMATE_DB_USERNAME="codemate"
+$env:CODEMATE_DB_PASSWORD="비밀번호"
+
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
+```
+
+명령 프롬프트(cmd):
+
+```cmd
+set CODEMATE_DB_HOST=localhost
+set CODEMATE_DB_PORT=3306
+set CODEMATE_DB_NAME=codemate
+set CODEMATE_DB_USERNAME=codemate
+set CODEMATE_DB_PASSWORD=비밀번호
+
+mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
+```
+
+MySQL 프로필을 실행하기 전에 `codemate` 데이터베이스와 접속 계정을 생성해야 한다.
+`CODEMATE_DB_PASSWORD`는 설정 파일에 저장하지 않고 반드시 환경변수로 전달한다.
+
+PowerShell의 `$env:변수명="값"` 문법을 cmd에서 실행하면 파일 이름 또는 디렉터리 이름 구문 오류가 발생한다.
+cmd에서는 `set 변수명=값` 문법을 사용한다.
 
 ### 1.3 서버 주소
 
@@ -76,6 +129,8 @@ Authorization: Bearer {{accessToken}}
 ---
 
 ## 3. H2 Console 확인
+
+H2 Console은 기본 `h2` 프로필에서만 사용할 수 있다. `mysql` 프로필에서는 비활성화된다.
 
 ### 3.1 접속 URL
 
@@ -1085,3 +1140,122 @@ Authorization: Bearer {{accessToken}}
 2. 승인 및 거절은 방장 토큰 사용.
 3. 요청 전에 `/api/users/me`로 현재 토큰의 계정을 확인.
 4. 로그인 요청의 Post-response 스크립트가 `accessToken`을 올바르게 교체했는지 확인.
+
+---
+
+## 23. MySQL 연결 및 데이터 영속성 테스트
+
+### 23.1 MySQL 사전 준비
+
+MySQL Workbench에서 로컬 MySQL 서버에 접속한 후 프로젝트 전용 데이터베이스와 계정을 준비한다.
+
+```sql
+CREATE DATABASE codemate
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'codemate'@'localhost' IDENTIFIED BY '비밀번호';
+GRANT ALL PRIVILEGES ON codemate.* TO 'codemate'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+이미 `codemate` 계정이 존재한다면 `CREATE USER`는 생략하고 권한만 확인한다.
+기존 MySQL 계정을 재사용할 수도 있지만 프로젝트 전용 계정을 사용하는 것을 권장한다.
+
+### 23.2 MySQL 프로필 실행 확인
+
+서버 시작 로그에서 아래 내용을 확인한다.
+
+```text
+The following 1 profile is active: "mysql"
+Database JDBC URL [jdbc:mysql://localhost:3306/codemate...]
+```
+
+다음 로그가 표시되면 H2 프로필이 실행된 상태이므로 서버를 종료하고 프로필 옵션을 확인한다.
+
+```text
+Database JDBC URL [jdbc:h2:mem:codemate]
+```
+
+### 23.3 테이블 생성 확인
+
+MySQL Workbench에서 실행한다.
+
+```sql
+USE codemate;
+SHOW TABLES;
+```
+
+확인할 테이블:
+
+- `users`
+- `study`
+- `study_members`
+- `tech_stacks`
+- `study_tech_stacks`
+
+### 23.4 API 저장 결과 확인
+
+Swagger 또는 Postman에서 회원가입, 스터디 생성, 참여 신청을 실행한 후 MySQL에서 확인한다.
+
+```sql
+SELECT * FROM users;
+SELECT * FROM study;
+SELECT * FROM study_members;
+SELECT * FROM tech_stacks;
+SELECT * FROM study_tech_stacks;
+```
+
+### 23.5 서버 재시작 후 데이터 유지 확인
+
+1. MySQL 프로필로 회원가입과 스터디 생성을 완료한다.
+2. 서버 실행 창에서 `Ctrl+C`로 서버를 종료한다.
+3. 같은 터미널에서 MySQL 프로필로 서버를 다시 실행한다.
+4. Swagger를 새로고침한다.
+5. 기존 계정으로 다시 로그인한다.
+6. 이전에 생성한 스터디가 목록과 상세 조회에서 유지되는지 확인한다.
+
+cmd 환경변수 확인:
+
+```cmd
+echo %CODEMATE_DB_USERNAME%
+echo %CODEMATE_DB_PASSWORD%
+```
+
+PowerShell 환경변수 확인:
+
+```powershell
+echo $env:CODEMATE_DB_USERNAME
+echo $env:CODEMATE_DB_PASSWORD
+```
+
+서버 재시작 후에도 기존 회원과 스터디가 조회되면 데이터 영속성 검증이 완료된 것이다.
+Swagger의 JWT 인증 상태는 서버 또는 페이지 재시작 후 유지되지 않으므로 로그인 후 새 토큰을 `Authorize`에 다시 입력한다.
+
+### 23.6 참여 신청 상태 변경 확인
+
+1. 신청자 토큰으로 참여 신청.
+2. 방장 토큰으로 신청 거절.
+3. 신청자 토큰으로 같은 스터디에 재신청.
+4. 방장 토큰으로 재신청 승인.
+5. 신청자 토큰으로 내 신청 내역 조회.
+6. `applicationStatus=APPROVED` 확인.
+
+MySQL에서도 상태를 확인할 수 있다.
+
+```sql
+SELECT id, study_id, user_id, status, created_at, updated_at
+FROM study_members
+ORDER BY id;
+```
+
+거절 후 재신청은 새 행을 생성하지 않고 기존 신청의 상태를 다시 `PENDING`으로 변경하므로 동일한 `id`가 유지된다.
+
+### 23.7 MySQL 검증 완료 기준
+
+1. `mysql` 프로필로 서버가 정상 실행됨.
+2. Hibernate가 MySQL에 테이블을 생성함.
+3. API로 생성한 데이터가 MySQL Workbench에서 조회됨.
+4. 서버 재시작 후에도 데이터가 유지됨.
+5. 신청 거절 → 재신청 → 승인 흐름이 정상 처리됨.
+6. 내 신청 내역에서 최종 상태가 `APPROVED`로 조회됨.
