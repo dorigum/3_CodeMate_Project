@@ -20,6 +20,10 @@ class ProfileConfigurationTests {
                     .startsWith("jdbc:h2:mem:codemate");
             assertThat(context.getEnvironment().getProperty("spring.h2.console.enabled"))
                     .isEqualTo("true");
+            assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto"))
+                    .isEqualTo("validate");
+            assertThat(context.getEnvironment().getProperty("spring.flyway.locations"))
+                    .isEqualTo("classpath:db/migration/h2");
         });
     }
 
@@ -44,6 +48,12 @@ class ProfileConfigurationTests {
                             .isEqualTo("test_password");
                     assertThat(context.getEnvironment().getProperty("spring.h2.console.enabled"))
                             .isEqualTo("false");
+                    assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto"))
+                            .isEqualTo("validate");
+                    assertThat(context.getEnvironment().getProperty("spring.flyway.baseline-on-migrate"))
+                            .isEqualTo("true");
+                    assertThat(context.getEnvironment().getProperty("spring.flyway.locations"))
+                            .isEqualTo("classpath:db/migration/mysql");
                 });
     }
 }

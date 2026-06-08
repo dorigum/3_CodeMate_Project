@@ -56,7 +56,7 @@ set CODEMATE_DB_HOST=localhost
 set CODEMATE_DB_PORT=3306
 set CODEMATE_DB_NAME=codemate
 set CODEMATE_DB_USERNAME=codemate
-set CODEMATE_DB_PASSWORD=비밀번호
+set CODEMATE_DB_PASSWORD=1111
 
 mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
 ```
@@ -1254,7 +1254,7 @@ ORDER BY id;
 ### 23.7 MySQL 검증 완료 기준
 
 1. `mysql` 프로필로 서버가 정상 실행됨.
-2. Hibernate가 MySQL에 테이블을 생성함.
+2. Flyway가 MySQL에 스키마를 생성하거나 기존 스키마를 baseline으로 등록함.
 3. API로 생성한 데이터가 MySQL Workbench에서 조회됨.
 4. 서버 재시작 후에도 데이터가 유지됨.
 5. 신청 거절 → 재신청 → 승인 흐름이 정상 처리됨.
@@ -1425,3 +1425,139 @@ MYSQL_HOST_PORT=3308
 6. `docker compose down`.
 7. `docker compose up -d`.
 8. 기존 계정 로그인 및 스터디 데이터 유지 확인.
+
+---
+
+## 25. Flyway 마이그레이션 확인
+
+### 25.1 Flyway 역할
+
+1. 애플리케이션 시작 시 DB의 현재 스키마 버전을 확인한다.
+2. 아직 적용되지 않은 SQL 파일을 버전 순서대로 실행한다.
+3. 실행 결과와 체크섬을 `flyway_schema_history` 테이블에 기록한다.
+4. Flyway 적용이 끝난 후 Hibernate가 엔티티와 실제 테이블 구조의 일치 여부를 검증한다.
+
+현재 Hibernate 설정은 `ddl-auto=validate`이므로 테이블을 자동 생성하거나 수정하지 않는다.
+
+### 25.2 마이그레이션 파일 위치
+
+H2:
+
+```text
+src/main/resources/db/migration/h2
+```
+
+MySQL:
+
+```text
+src/main/resources/db/migration/mysql
+```
+
+현재 초기 버전:
+
+```text
+V1__create_initial_schema.sql
+```
+
+H2와 MySQL은 긴 문자열과 날짜 타입 표현이 다를 수 있으므로 DB별 경로를 분리한다. 두 경로의 파일 버전과 논리적 변경 내용은 항상 동일하게 유지한다.
+
+### 25.3 새 마이그레이션 작성 규칙
+
+1. 이미 적용된 `V1` 파일은 수정하지 않는다.
+2. DB 구조 변경은 다음 번호의 파일로 추가한다.
+3. 버전과 설명 사이에는 밑줄 두 개를 사용한다.
+4. H2와 MySQL 경로에 같은 버전의 파일을 함께 추가한다.
+5. 엔티티 변경과 SQL 마이그레이션을 같은 작업 단위로 관리한다.
+
+예시:
+
+```text
+db/migration/h2/V2__add_user_profile_image.sql
+db/migration/mysql/V2__add_user_profile_image.sql
+```
+
+```sql
+ALTER TABLE users ADD COLUMN profile_image_url VARCHAR(500);
+```
+
+한 번 적용된 파일을 수정하면 Flyway 체크섬 검증 오류가 발생한다. 이 경우 기존 파일을 고치는 대신 새 버전의 보정 마이그레이션을 작성한다.
+
+### 25.4 기존 MySQL 데이터베이스 전환
+
+기존 MySQL에는 Hibernate가 만든 테이블이 이미 있으므로 다음 설정을 사용한다.
+
+```properties
+spring.flyway.baseline-on-migrate=true
+spring.flyway.baseline-version=1
+```
+
+동작:
+
+1. 비어 있는 새 DB는 V1 SQL을 직접 실행한다.
+2. 테이블이 있지만 Flyway 이력이 없는 기존 DB는 현재 구조를 V1 baseline으로 등록한다.
+3. 기존 회원, 스터디, 참여 신청 데이터는 삭제하지 않는다.
+4. baseline 등록 이후 Hibernate가 엔티티와 테이블 구조를 검증한다.
+
+모든 개발·배포 환경에 `flyway_schema_history`가 생성된 뒤에는 자동 baseline 설정 제거를 검토한다. 운영 환경에서 잘못된 스키마를 정상 상태로 간주하지 않도록 하기 위함이다.
+
+### 25.5 MySQL 적용 이력 조회
+
+MySQL Workbench:
+
+```sql
+SELECT installed_rank, version, description, type, success, installed_on
+FROM flyway_schema_history
+ORDER BY installed_rank;
+```
+
+새 DB에서 V1 SQL이 실행된 경우:
+
+```text
+version=1
+type=SQL
+success=1
+```
+
+기존 DB가 전환된 경우:
+
+```text
+version=1
+type=BASELINE
+success=1
+```
+
+Docker MySQL:
+
+```powershell
+docker exec codemate-mysql mysql `
+  -u codemate `
+  -p codemate `
+  -e "SELECT installed_rank, version, description, type, success FROM flyway_schema_history;"
+```
+
+`-p` 뒤에는 `.env`의 `CODEMATE_DB_PASSWORD` 값을 입력하거나 명령 실행 후 비밀번호를 입력한다.
+
+### 25.6 정상 실행 로그
+
+새 DB에서는 다음 흐름의 로그가 출력된다.
+
+```text
+Migrating schema ... to version "1 - create initial schema"
+Successfully applied 1 migration
+Started CodeMateApplication
+```
+
+이후 재실행에서는 새 마이그레이션이 없으므로 현재 버전이 최신 상태라는 로그가 출력된다.
+
+### 25.7 Flyway 오류 확인 기준
+
+1. `Validate failed`
+   - 이미 적용된 SQL 파일의 내용이 변경되어 체크섬이 달라진 경우.
+2. `Schema validation: missing table`
+   - 엔티티는 존재하지만 마이그레이션에 테이블이 없는 경우.
+3. `wrong column type`
+   - 엔티티 타입과 SQL 컬럼 타입이 다른 경우.
+4. `Found non-empty schema but no schema history table`
+   - 기존 DB에 baseline 설정 없이 Flyway를 처음 적용한 경우.
+
+오류가 발생하면 기존 V1 파일을 수정하기 전에 DB 이력과 현재 적용 환경부터 확인한다.

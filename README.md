@@ -27,9 +27,9 @@
 | Language | Java 17 |
 | Framework | Spring Boot 4.0.6 |
 | Web | Spring Web MVC |
-| Persistence | Spring Data JPA, Hibernate |
+| Persistence | Spring Data JPA, Hibernate, Flyway |
 | Security | Spring Security, JWT |
-| Database | H2, MySQL Driver |
+| Database | H2, MySQL 8.4 |
 | Build | Maven, Maven Wrapper |
 | Test | JUnit 5, MockMvc, Spring Security Test |
 | API Docs | springdoc-openapi, Swagger UI |
@@ -119,6 +119,22 @@ $env:CODEMATE_DB_PASSWORD="비밀번호"
 - Password: 기본값 없음, `CODEMATE_DB_PASSWORD` 필수
 
 MySQL 프로필에서는 H2 Console이 비활성화됩니다.
+
+## DB 마이그레이션
+
+Flyway가 애플리케이션 시작 시 DB 스키마 버전을 확인하고 필요한 SQL을 순서대로 적용합니다.
+
+- H2: `src/main/resources/db/migration/h2`
+- MySQL: `src/main/resources/db/migration/mysql`
+- 현재 버전: `V1__create_initial_schema.sql`
+- Hibernate: `ddl-auto=validate`
+
+이미 적용된 마이그레이션 파일은 수정하지 않고, 스키마 변경 시 H2와 MySQL 경로에 동일한 버전의 새 파일을 추가합니다.
+
+```text
+V2__add_user_profile_image.sql
+V3__create_study_bookmarks.sql
+```
 
 ## Docker Compose 실행
 
@@ -220,7 +236,6 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 
 ## 향후 계획
 
-- Flyway 기반 DB 마이그레이션
 - 공통 예외 처리 및 Swagger Schema 보강
 
 ---

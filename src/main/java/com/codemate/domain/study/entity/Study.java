@@ -11,12 +11,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.Length;
 
 @Getter
 @Entity
@@ -34,8 +34,7 @@ public class Study extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String title;
 
-    @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, length = Length.LONG32)
     private String content;
 
     @Enumerated(EnumType.STRING)

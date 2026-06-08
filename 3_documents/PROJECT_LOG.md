@@ -2151,3 +2151,80 @@ docker compose down
 5. `http://localhost:8081/actuator/health` 응답 `UP` 확인.
 6. 기존 로컬 서버의 8080 포트와 충돌하지 않도록 Docker 애플리케이션 검증 시 8081 포트 사용.
 7. Maven 테스트 19개 전체 통과.
+
+
+---
+## 2026-06-08 - Flyway 기반 DB 마이그레이션 도입
+
+### 1. Flyway 의존성 구성
+
+1. `spring-boot-starter-flyway` 추가.
+2. MySQL 지원을 위한 `flyway-mysql` 런타임 모듈 추가.
+3. Spring Boot 시작 과정에서 JPA 초기화 전에 Flyway 마이그레이션 실행.
+
+### 2. 초기 스키마 마이그레이션
+
+1. `V1__create_initial_schema.sql` 작성.
+2. 초기 테이블
+   - `users`.
+   - `study`.
+   - `study_members`.
+   - `tech_stacks`.
+   - `study_tech_stacks`.
+3. 기본키, 외래키, 유니크 제약조건, 조회용 인덱스 명시.
+4. 엔티티의 컬럼 길이와 nullable 조건을 SQL에 반영.
+
+### 3. DB별 마이그레이션 분리
+
+1. H2 경로
+   - `db/migration/h2`.
+2. MySQL 경로
+   - `db/migration/mysql`.
+3. 분리 이유
+   - H2의 긴 문자열은 `CLOB`.
+   - MySQL의 긴 문자열은 `LONGTEXT`.
+   - 날짜 타입은 H2 `TIMESTAMP(6)`, MySQL `DATETIME(6)` 사용.
+4. 두 DB에서 동일한 버전과 논리적 스키마 유지.
+
+### 4. Hibernate 스키마 관리 전환
+
+1. H2와 MySQL의 `spring.jpa.hibernate.ddl-auto`를 `update`에서 `validate`로 변경.
+2. 테이블 생성과 변경 책임을 Flyway로 이동.
+3. Hibernate는 엔티티와 실제 DB 구조가 일치하는지만 검증.
+4. 모집 글 본문을 `Length.LONG32`로 명시해 MySQL `LONGTEXT`와 매핑.
+
+### 5. 기존 MySQL 전환
+
+1. `baseline-on-migrate=true` 적용.
+2. 기존 Hibernate 생성 스키마를 V1 baseline으로 등록.
+3. 기존 테이블과 데이터 삭제 없이 Flyway 관리 시작.
+4. 모든 환경의 전환 완료 후 자동 baseline 설정 제거 검토.
+
+### 6. 테스트 보강
+
+1. Flyway 현재 버전이 V1인지 확인하는 통합 테스트 추가.
+2. H2와 MySQL 프로필의 `ddl-auto=validate` 설정 검증.
+3. MySQL 프로필의 baseline 설정 검증.
+
+### 7. 트러블슈팅
+
+1. H2 `LONGTEXT` 타입 불일치
+   - 원인: H2 MySQL 모드에서 `LONGTEXT`를 `VARCHAR`로 해석.
+   - 증상: Hibernate가 기대한 `CLOB`과 실제 타입 불일치.
+   - 해결: H2와 MySQL 마이그레이션 경로 분리.
+2. MySQL `@Lob String` 타입 불일치
+   - 원인: Hibernate 7이 길이 정보가 없는 `@Lob String`을 `TINYTEXT`로 검증.
+   - 증상: V1의 `LONGTEXT`와 Hibernate 기대 타입 불일치.
+   - 해결: `Length.LONG32`로 긴 본문 의도를 명시하고 `LONGTEXT` 유지.
+
+### 8. 검증 결과
+
+1. H2에서 Flyway V1 SQL 적용 성공.
+2. H2 Hibernate 스키마 검증 성공.
+3. Maven 테스트 20개 전체 통과.
+4. 빈 임시 MySQL에서 V1 SQL 직접 실행 성공.
+5. 빈 MySQL에 5개 도메인 테이블과 `flyway_schema_history` 생성 확인.
+6. 새 MySQL 이력의 `type=SQL`, `version=1`, `success=1` 확인.
+7. 기존 Docker MySQL 이력의 `type=BASELINE`, `version=1`, `success=1` 확인.
+8. 실제 `codemate-app`, `codemate-mysql` 컨테이너 healthy 상태 확인.
+9. Docker 애플리케이션 `http://localhost:8081` 정상 기동 확인.
