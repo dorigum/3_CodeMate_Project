@@ -2038,3 +2038,116 @@ Postman_실행_가이드.md
    - 참여 신청 거절, 재신청, 승인 테스트.
 
 4. README 문서 링크를 새 파일명으로 변경.
+
+
+---
+## 2026-06-08 - Docker 실행 환경 구성
+
+### 1. Docker 이미지 구성
+
+1. 멀티 스테이지 `Dockerfile` 적용.
+2. 빌드 단계
+   - Eclipse Temurin 17 JDK Alpine 이미지 사용.
+   - Maven Wrapper로 의존성 준비 및 JAR 빌드.
+   - 테스트는 로컬 Maven 검증 단계에서 실행하고 이미지 빌드에서는 생략.
+3. 실행 단계
+   - Eclipse Temurin 17 JRE Alpine 이미지 사용.
+   - Health Check용 `curl` 설치.
+   - `codemate` 비루트 사용자로 애플리케이션 실행.
+   - 애플리케이션 포트 `8080` 노출.
+
+### 2. Docker Compose 구성
+
+서비스:
+
+1. `app`
+   - CodeMate Spring Boot 이미지 빌드.
+   - `mysql` 프로필 활성화.
+   - Docker 내부의 `mysql:3306`으로 접속.
+   - MySQL이 healthy 상태가 된 후 시작.
+
+2. `mysql`
+   - MySQL `8.4` 이미지 사용.
+   - 데이터베이스와 사용자 정보를 `.env`에서 주입.
+   - MySQL 데이터 볼륨 연결.
+
+기본 포트:
+
+- 애플리케이션: `8080:8080`.
+- MySQL: `3307:3306`.
+- 로컬 MySQL `3306`과 Docker MySQL의 포트 충돌 방지.
+
+### 3. 환경변수 관리
+
+1. `.env.example` 추가.
+2. `.env`를 `.gitignore`에 등록.
+3. 관리 항목
+   - 애플리케이션 외부 포트.
+   - MySQL 외부 포트.
+   - 데이터베이스 이름과 계정.
+   - DB 사용자 및 root 비밀번호.
+   - JWT Secret.
+4. 실제 비밀번호와 Secret은 Git에 포함하지 않음.
+
+### 4. Health Check
+
+1. Spring Boot Actuator 의존성 추가.
+2. `/actuator/health`만 외부 노출.
+3. Health 상세 정보는 공개하지 않음.
+4. Spring Security에서 `/actuator/health` 공개 접근 허용.
+5. MySQL은 `mysqladmin ping`으로 상태 확인.
+6. 애플리케이션은 Actuator 응답의 `status=UP` 확인.
+
+### 5. Docker 빌드 최적화
+
+1. `.dockerignore` 추가.
+2. 제외 대상
+   - Git 메타데이터.
+   - IDE 설정.
+   - 기존 `target` 빌드 결과.
+   - 로컬 `.env`.
+   - 프로젝트 문서.
+3. Maven 의존성 다운로드 레이어와 소스 빌드 레이어 분리.
+
+### 6. 실행 및 데이터 유지
+
+실행:
+
+```powershell
+docker compose up --build -d
+```
+
+상태 확인:
+
+```powershell
+docker compose ps
+```
+
+종료:
+
+```powershell
+docker compose down
+```
+
+- 일반 종료 시 MySQL 볼륨 유지.
+- 재실행 후 회원과 스터디 데이터 유지.
+- `docker compose down -v` 실행 시 MySQL 데이터 초기화.
+
+### 7. 검증 항목
+
+1. Dockerfile 멀티 스테이지 빌드.
+2. Compose 환경변수 치환과 문법 검증.
+3. Actuator Health API 인증 없는 접근 테스트.
+4. 기존 API 전체 회귀 테스트.
+5. 애플리케이션 이미지 빌드.
+6. MySQL과 애플리케이션 컨테이너 healthy 상태 확인.
+
+### 8. 검증 결과
+
+1. `docker compose --env-file .env.example config` 설정 검증 통과.
+2. `3_codemate-app:latest` 애플리케이션 이미지 빌드 성공.
+3. `codemate-mysql` 컨테이너 `healthy` 상태 확인.
+4. `codemate-app` 컨테이너 `healthy` 상태 확인.
+5. `http://localhost:8081/actuator/health` 응답 `UP` 확인.
+6. 기존 로컬 서버의 8080 포트와 충돌하지 않도록 Docker 애플리케이션 검증 시 8081 포트 사용.
+7. Maven 테스트 19개 전체 통과.

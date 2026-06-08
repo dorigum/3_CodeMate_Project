@@ -120,6 +120,41 @@ $env:CODEMATE_DB_PASSWORD="비밀번호"
 
 MySQL 프로필에서는 H2 Console이 비활성화됩니다.
 
+## Docker Compose 실행
+
+Docker Desktop을 실행한 후 환경변수 파일을 준비합니다.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env`의 DB 비밀번호, MySQL root 비밀번호, JWT Secret을 실제 개발용 값으로 변경한 뒤 실행합니다.
+
+```powershell
+docker compose up --build -d
+docker compose ps
+```
+
+기본 접속 주소:
+
+- 애플리케이션: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- MySQL 외부 포트: `3307`
+- Health Check: `http://localhost:8080/actuator/health`
+
+로그와 종료:
+
+```powershell
+docker compose logs -f app
+docker compose down
+```
+
+MySQL 데이터까지 초기화하려면 다음 명령을 사용합니다.
+
+```powershell
+docker compose down -v
+```
+
 ## Swagger/OpenAPI
 
 서버 실행 후 아래 주소에서 API 명세를 확인하고 직접 요청할 수 있습니다.
@@ -185,7 +220,8 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 
 ## 향후 계획
 
-- Docker 기반 실행 환경 구성
+- Flyway 기반 DB 마이그레이션
+- 공통 예외 처리 및 Swagger Schema 보강
 
 ---
 *Updated at_2026.06.08*

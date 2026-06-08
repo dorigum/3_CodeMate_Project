@@ -1,0 +1,10 @@
+.git
+.github
+.idea
+.obsidian
+.vscode
+3_documents
+target
+.env
+*.iml
+HELP.md

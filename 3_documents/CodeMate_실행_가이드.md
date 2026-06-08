@@ -1259,3 +1259,169 @@ ORDER BY id;
 4. 서버 재시작 후에도 데이터가 유지됨.
 5. 신청 거절 → 재신청 → 승인 흐름이 정상 처리됨.
 6. 내 신청 내역에서 최종 상태가 `APPROVED`로 조회됨.
+
+---
+
+## 24. Docker Compose 서버 테스트
+
+### 24.1 사전 준비
+
+1. Docker Desktop을 실행한다.
+2. 프로젝트 루트에서 Docker 명령이 동작하는지 확인한다.
+
+```powershell
+docker --version
+docker compose version
+```
+
+### 24.2 환경변수 파일 생성
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+cmd:
+
+```cmd
+copy .env.example .env
+```
+
+`.env`에서 다음 값을 실제 로컬 개발용 값으로 변경한다.
+
+```dotenv
+CODEMATE_DB_PASSWORD=MySQL 사용자 비밀번호
+MYSQL_ROOT_PASSWORD=MySQL root 비밀번호
+CODEMATE_JWT_SECRET=Base64 JWT Secret
+```
+
+`.env`는 `.gitignore`에 등록되어 원격 저장소에 포함되지 않는다.
+
+### 24.3 컨테이너 실행
+
+```powershell
+docker compose up --build -d
+```
+
+구성:
+
+- `codemate-app`: Spring Boot 애플리케이션.
+- `codemate-mysql`: MySQL 8.4.
+- `codemate-mysql-data`: MySQL 데이터 영속 볼륨.
+
+기본 포트:
+
+| 서비스 | 컨테이너 포트 | 호스트 포트 |
+|---|---:|---:|
+| Spring Boot | `8080` | `8080` |
+| MySQL | `3306` | `3307` |
+
+로컬 MySQL의 기본 포트 `3306`과 충돌하지 않도록 Docker MySQL은 호스트 `3307`을 사용한다.
+
+### 24.4 실행 상태 확인
+
+```powershell
+docker compose ps
+```
+
+두 서비스가 모두 `healthy`인지 확인한다.
+
+애플리케이션 Health Check:
+
+```text
+http://localhost:8080/actuator/health
+```
+
+정상 응답:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+Swagger UI:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+### 24.5 로그 확인
+
+전체 로그:
+
+```powershell
+docker compose logs -f
+```
+
+애플리케이션 로그:
+
+```powershell
+docker compose logs -f app
+```
+
+MySQL 로그:
+
+```powershell
+docker compose logs -f mysql
+```
+
+로그 출력을 종료할 때는 `Ctrl+C`를 누른다. 컨테이너는 백그라운드에서 계속 실행된다.
+
+### 24.6 컨테이너 종료와 재실행
+
+컨테이너 종료:
+
+```powershell
+docker compose down
+```
+
+MySQL 볼륨은 유지되므로 다시 실행해도 데이터가 남는다.
+
+```powershell
+docker compose up -d
+```
+
+### 24.7 MySQL 데이터 초기화
+
+아래 명령은 컨테이너와 MySQL 데이터 볼륨을 함께 삭제한다.
+
+```powershell
+docker compose down -v
+```
+
+회원, 스터디, 참여 신청 데이터가 모두 삭제되므로 초기화가 필요한 경우에만 사용한다.
+
+### 24.8 포트 충돌 해결
+
+호스트의 `8080` 포트를 이미 사용 중이면 `.env`를 수정한다.
+
+```dotenv
+APP_PORT=8081
+```
+
+이 경우 Swagger 주소:
+
+```text
+http://localhost:8081/swagger-ui/index.html
+```
+
+Docker MySQL의 외부 포트를 변경하려면:
+
+```dotenv
+MYSQL_HOST_PORT=3308
+```
+
+애플리케이션 컨테이너는 Docker 내부에서 `mysql:3306`으로 연결되므로 외부 포트 변경의 영향을 받지 않는다.
+
+### 24.9 Docker 검증 순서
+
+1. `docker compose up --build -d`.
+2. `docker compose ps`에서 MySQL과 앱의 `healthy` 확인.
+3. `/actuator/health`에서 `UP` 확인.
+4. Swagger UI 접속.
+5. 회원가입, 로그인, 스터디 생성.
+6. `docker compose down`.
+7. `docker compose up -d`.
+8. 기존 계정 로그인 및 스터디 데이터 유지 확인.
