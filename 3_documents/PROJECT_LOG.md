@@ -1369,12 +1369,206 @@ Swagger UI: http://localhost:8080/swagger-ui/index.html
 OpenAPI JSON: http://localhost:8080/v3/api-docs
 ```
 
-### 8. 다음 작업 후보
+### 8. 요청·응답 JSON 예시 문서화
 
-1. MySQL profile 분리
-2. 목록 조회 N+1 쿼리 최적화
-3. Dockerfile 및 Docker Compose 구성
-4. 테스트 SQL 로그 분리
+- Swagger UI에서 API를 처음 확인하는 사용자도 별도 문서를 열지 않고 요청 형식을 이해할 수 있도록 JSON 예시를 제공하는 방향으로 정리.
+- 회원가입, 로그인, 모집 글 생성·수정처럼 Request Body가 있는 API를 우선 적용 대상으로 선정.
+- 단순 성공 응답뿐 아니라 검증 실패, 인증 실패, 권한 실패, 중복 요청과 같은 대표 오류 응답 예시도 함께 제공할 필요가 있음.
+- 예시는 실제 공통 응답 구조인 `success`, `message`, `data` 형식을 기준으로 작성.
+
+회원가입 요청 예시:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "nickname": "codemate",
+  "mainTechStack": "Spring Boot"
+}
+```
+
+로그인 성공 응답 예시:
+
+```json
+{
+  "success": true,
+  "message": "로그인이 완료되었습니다.",
+  "data": {
+    "tokenType": "Bearer",
+    "accessToken": "JWT_ACCESS_TOKEN"
+  }
+}
+```
+
+모집 글 생성 요청 예시:
+
+```json
+{
+  "title": "Spring Boot 스터디",
+  "content": "매주 프로젝트 코드를 리뷰합니다.",
+  "category": "STUDY",
+  "meetingType": "ONLINE",
+  "location": "Discord",
+  "maxMemberCount": 4,
+  "techStackNames": [
+    "Java",
+    "Spring Boot",
+    "JPA"
+  ]
+}
+```
+
+- 실제 코드 보강 시 `@io.swagger.v3.oas.annotations.media.ExampleObject`, `@Content`, `@Schema(example = "...")` 적용을 검토.
+- 현재 단계에서는 Controller의 API 설명과 상태 코드가 등록되어 있으며, 구체적인 JSON example annotation은 후속 보강 대상으로 분류.
+
+### 9. DTO 필드별 Schema 설명
+
+- 요청·응답 DTO의 각 필드가 의미하는 값, 입력 제한, 예시를 Swagger Schema에서 확인할 수 있도록 정리.
+- Bean Validation의 `@NotBlank`, `@Size`, `@Min`과 OpenAPI의 `@Schema`를 함께 사용해 실행 검증과 문서 설명을 일치시키는 방향.
+- enum 필드는 문자열 입력값과 허용 범위를 명확히 표시.
+
+주요 적용 대상:
+
+- `SignupRequest`
+  - `email`: 로그인에 사용할 이메일
+  - `password`: 8자 이상 비밀번호
+  - `nickname`: 서비스에서 표시할 닉네임
+  - `mainTechStack`: 사용자의 대표 기술 스택
+- `LoginRequest`
+  - `email`: 가입된 이메일
+  - `password`: 가입 시 등록한 비밀번호
+- `StudyCreateRequest`, `StudyUpdateRequest`
+  - `title`, `content`: 모집 글 제목과 상세 내용
+  - `category`: 스터디 또는 모각코 구분
+  - `meetingType`: 온라인 또는 오프라인 진행 방식
+  - `location`: 오프라인 장소 또는 온라인 채널
+  - `maxMemberCount`: 방장을 포함한 최대 참여 인원
+  - `techStackNames`: 최대 10개의 기술 스택 이름
+- `StudyResponse`, `StudySummaryResponse`
+  - 방장 정보, 모집 인원, 모집 상태, 기술 스택, 생성·수정 시각
+- `StudyMemberResponse`
+  - 신청 ID, 스터디 ID, 신청자 정보, 신청 상태, 신청 시각
+- `LoginResponse`
+  - JWT 인증 방식과 access token
+
+적용 형태 예시:
+
+```java
+@Schema(
+        description = "방장을 포함한 최대 참여 인원",
+        example = "4",
+        minimum = "2"
+)
+int maxMemberCount
+```
+
+- 현재 DTO에는 Bean Validation이 적용되어 있으나 필드별 `@Schema` 설명은 아직 적용되지 않아 후속 문서화 보강 항목으로 관리.
+
+### 10. 공통 오류 응답 모델 명시
+
+- 모든 오류 응답이 공통 `ApiResponse<Void>` 구조를 사용한다는 점을 OpenAPI 문서에서도 일관되게 표현할 필요가 있음.
+- Controller의 응답 코드 설명만으로는 실제 JSON 구조가 충분히 드러나지 않으므로 공통 오류 Schema 또는 전용 문서 DTO 적용을 검토.
+
+공통 오류 응답 구조:
+
+```json
+{
+  "success": false,
+  "message": "오류 메시지"
+}
+```
+
+대표 오류 응답:
+
+```json
+{
+  "success": false,
+  "message": "로그인이 필요합니다."
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "스터디 방장만 처리할 수 있습니다."
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "이미 참여 신청한 스터디입니다."
+}
+```
+
+주요 상태 코드:
+
+- `400 Bad Request`: 입력값 검증 실패, 잘못된 모집 인원, 처리할 수 없는 신청 상태
+- `401 Unauthorized`: 토큰 없음, 만료 또는 유효하지 않은 JWT
+- `403 Forbidden`: 방장 권한 없음
+- `404 Not Found`: 회원, 스터디 또는 참여 신청 내역 없음
+- `409 Conflict`: 이메일·닉네임 중복, 스터디 중복 신청
+- `500 Internal Server Error`: 처리되지 않은 서버 오류
+
+- 실제 코드 보강 시 공통 오류 응답 문서 DTO 또는 재사용 가능한 OpenAPI annotation 구성을 검토.
+- `CustomAuthenticationEntryPoint`, `CustomAccessDeniedHandler`, `GlobalExceptionHandler`의 실제 응답과 Swagger 예시가 달라지지 않도록 함께 관리.
+
+### 11. enum 값 설명
+
+- Swagger UI에서 enum 필드의 허용 값뿐 아니라 각 값의 의미까지 이해할 수 있도록 설명을 보강할 필요가 있음.
+
+`StudyCategory`:
+
+- `STUDY`: 일정한 목표나 커리큘럼을 가진 스터디
+- `MOGAKKO`: 모여서 각자 코딩하는 단기·원데이 모임
+
+`MeetingType`:
+
+- `ONLINE`: Discord, Zoom 등 온라인 공간에서 진행
+- `OFFLINE`: 카페, 스터디룸 등 실제 장소에서 진행
+
+`StudyStatus`:
+
+- `RECRUITING`: 참여자를 모집 중인 상태
+- `CLOSED`: 정원 도달 또는 방장 결정으로 모집이 마감된 상태
+- `IN_PROGRESS`: 모집이 끝나고 활동이 진행 중인 상태
+- `FINISHED`: 스터디 또는 모각코 활동이 종료된 상태
+
+`StudyMemberStatus`:
+
+- `PENDING`: 방장 승인 대기
+- `APPROVED`: 참여 승인 완료
+- `REJECTED`: 참여 신청 거절
+
+`UserRole`:
+
+- `ROLE_USER`: 일반 사용자
+- `ROLE_ADMIN`: 관리자
+
+- 실제 코드 보강 시 DTO enum 필드의 `@Schema(description = "...", allowableValues = {...})` 또는 enum 자체의 설명 노출 방식을 검토.
+
+### 12. 문서화 보강 상태 정리
+
+- 2026년 6월 7일 기준 완료:
+  - springdoc 의존성 및 Swagger UI 적용
+  - OpenAPI 기본 정보 등록
+  - JWT Bearer 인증 스키마 적용
+  - Controller별 태그, 기능 설명, 주요 HTTP 상태 코드 등록
+  - OpenAPI JSON 노출 및 통합 테스트
+- 후속 코드 적용 필요:
+  - 요청·응답별 구체적인 JSON example annotation
+  - DTO 필드별 `@Schema` 설명과 example
+  - 공통 오류 응답 Schema의 재사용 구성
+  - enum 값별 의미 설명 노출
+
+### 13. 다음 작업 후보
+
+1. Swagger 요청·응답 예시 annotation 적용
+2. DTO 및 enum Schema 설명 적용
+3. 공통 오류 응답 문서 모델 구성
+4. MySQL profile 분리
+5. 목록 조회 N+1 쿼리 최적화
+6. Dockerfile 및 Docker Compose 구성
 
 ---
 
@@ -1502,3 +1696,182 @@ status=APPROVED
 - 환경 변수는 실패 응답에서 덮어쓰지 않도록 성공 조건을 검사한다.
 - 동적 URL에 사용되는 `studyId`, `memberId`는 Console의 실제 요청 URL로 검증한다.
 - 계정 전환이 많은 테스트는 요청을 계정별로 분리해 실수를 줄인다.
+
+
+---
+## 2026-06-08 - Swagger 스터디 목록 조회 401 오류 트러블슈팅
+
+### 1. 문제 상황
+
+- Swagger UI에서 `GET /api/studies` 모집 글 목록 및 검색 API 실행.
+- 스터디 목록 조회는 공개 API이지만 HTTP `401 Unauthorized` 응답 발생.
+- 응답 Body에 `로그인이 필요합니다.` 메시지 표시.
+- Swagger UI가 다음과 같은 요청 URL을 자동 생성.
+
+```text
+GET /api/studies?keyword=Java&page=0&size=1&sort=%5B%22string%22%5D
+```
+
+- 디코딩한 `sort` 값:
+
+```text
+sort=["string"]
+```
+
+### 2. 원인 분석
+
+1. 공개 API 인증 설정 확인
+   - `/api/studies`의 `GET` 요청은 Spring Security에서 `permitAll()`로 설정된 상태.
+   - 정상적인 페이징 요청을 인증 없이 직접 실행했을 때 HTTP `200 OK` 확인.
+   - 로그인이나 JWT가 필요한 API로 잘못 설정된 문제는 아니었음.
+
+2. Swagger의 `Pageable` 문서 생성 방식 확인
+   - Controller의 `Pageable` 파라미터가 Swagger에서 하나의 필수 JSON 객체로 표시됨.
+   - Swagger 예시값의 `sort`에 `["string"]`이 자동으로 포함됨.
+   - Spring Data가 기대하는 `sort=필드명,정렬방향` 형식과 일치하지 않는 요청 생성.
+
+3. 오류 응답이 401로 표시된 이유 확인
+   - 잘못된 정렬 조건으로 요청 처리 중 예외 발생.
+   - Spring Boot가 예외 처리를 위해 `/error` 경로로 ERROR 디스패치 수행.
+   - Security 설정에서 ERROR 디스패치가 허용되지 않아 인증 실패 처리 실행.
+   - 실제 원인은 잘못된 `sort` 값이지만 최종 응답은 `로그인이 필요합니다.`라는 401로 표시됨.
+
+### 3. 해결 방법
+
+1. Swagger 페이징 파라미터 분리
+   - `StudyController`의 `Pageable` 파라미터에 `@ParameterObject` 적용.
+   - Swagger UI에서 `pageable` JSON 객체 제거.
+   - `page`, `size`, `sort`를 각각 독립된 Query Parameter로 표시.
+
+```java
+@ParameterObject
+@PageableDefault(size = 10)
+Pageable pageable
+```
+
+2. ERROR 디스패치 허용
+   - Spring Security 설정에 `DispatcherType.ERROR` 허용 규칙 추가.
+   - 애플리케이션 처리 오류가 인증 오류인 것처럼 401로 변환되는 현상 방지.
+
+```java
+.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+```
+
+3. Swagger 입력 방법 정리
+   - 정렬이 필요하지 않으면 `sort` 입력값을 비워서 요청.
+   - 정렬이 필요하면 다음 형식 사용.
+
+```text
+sort=createdAt,desc
+sort=title,asc
+```
+
+### 4. 검증 결과
+
+1. OpenAPI 문서 확인
+   - `/api/studies` Query Parameter에 `page`, `size`, `sort`가 각각 생성되는지 확인.
+   - 잘못 생성되던 `pageable` 객체가 제거되었는지 확인.
+
+2. 공개 API 확인
+   - JWT 없이 `GET /api/studies?keyword=Java&page=0&size=1` 실행.
+   - HTTP `200 OK` 및 공통 성공 응답 반환 확인.
+
+3. 회귀 테스트 추가
+   - OpenAPI 문서의 페이징 파라미터 구성 검증.
+   - 비로그인 상태의 스터디 목록 조회 성공 검증.
+   - Maven 전체 테스트 `13개` 통과.
+
+### 5. 정리
+
+- 화면에 표시된 HTTP 상태와 메시지만으로 인증 문제라고 단정하지 않고 실제 Request URL을 먼저 확인.
+- Swagger가 자동 생성한 예시값도 서버가 기대하는 형식과 일치하는지 검증 필요.
+- 공개 API의 정상 응답뿐 아니라 오류 처리 경로의 Security 설정도 함께 확인.
+- `Pageable`을 OpenAPI에 노출할 때 `@ParameterObject`를 적용해 실제 Query Parameter 구조와 문서를 일치.
+
+
+---
+## 2026-06-08 - 참여 신청 조회 및 재신청 기능 보강
+
+### 1. 모집 글 삭제 연관 데이터 처리
+
+1. 문제 확인
+   - 참여 신청이 존재하는 모집 글 삭제 시 `DataIntegrityViolationException` 발생.
+   - `study_members.study_id` 외래키가 삭제 대상 스터디를 참조해 HTTP `500` 반환.
+
+2. 삭제 순서 변경
+   - 참여 신청 내역 삭제.
+   - 스터디 기술 스택 연결 삭제.
+   - Repository `flush()`로 하위 데이터 삭제 SQL 우선 반영.
+   - 마지막으로 스터디 모집 글 삭제.
+
+3. 검증
+   - 참여 신청이 존재하는 스터디 삭제 통합 테스트 추가.
+   - 삭제 후 상세 조회 시 `404 Not Found` 확인.
+
+### 2. 내 스터디 신청 내역 조회 API
+
+1. API 추가
+
+```http
+GET /api/users/me/study-applications
+```
+
+2. 상태별 필터 지원
+
+```http
+GET /api/users/me/study-applications?status=PENDING
+GET /api/users/me/study-applications?status=APPROVED
+GET /api/users/me/study-applications?status=REJECTED
+```
+
+3. 응답 정보
+   - `applicationId`: 참여 신청 ID.
+   - `studyId`: 스터디 모집 글 ID.
+   - `studyTitle`: 스터디 모집 글 제목.
+   - `hostNickname`: 방장 닉네임.
+   - `studyStatus`: 모집 글 진행 상태.
+   - `applicationStatus`: 신청 처리 상태.
+   - `appliedAt`: 최초 신청 또는 최근 재신청 시각.
+
+4. 조회 정책
+   - 로그인 사용자 본인의 신청 내역만 조회.
+   - 최신 신청 또는 재신청 시각 기준 내림차순 정렬.
+   - 상태 조건이 없으면 전체 신청 내역 반환.
+
+### 3. 거절된 스터디 재신청
+
+1. 기존 문제
+   - `(study_id, user_id)` 유니크 제약과 중복 신청 검사로 `REJECTED` 상태도 재신청 불가.
+
+2. 재신청 정책
+   - `REJECTED`: 기존 신청 행의 상태를 `PENDING`으로 변경.
+   - `PENDING`: 중복 신청으로 `409 Conflict`.
+   - `APPROVED`: 중복 신청으로 `409 Conflict`.
+   - 모집 중이 아니거나 정원이 가득 찬 스터디는 재신청 불가.
+
+3. 데이터 처리
+   - 새로운 신청 행을 생성하지 않고 기존 `memberId` 유지.
+   - `updatedAt` 갱신으로 최근 재신청 시각 관리.
+   - 신청 이력 조회의 `appliedAt`에 최근 재신청 시각 사용.
+
+4. 검증
+   - 신청 → 거절 → 재신청 시 `PENDING` 전환 확인.
+   - 재신청 후 같은 사용자의 추가 신청은 `409 Conflict` 확인.
+   - 기존 `memberId`가 유지되는지 확인.
+
+### 4. Swagger 및 Security 보완
+
+1. 스터디 목록의 `Pageable`에 `@ParameterObject` 적용.
+2. Swagger Query Parameter를 `page`, `size`, `sort`로 분리.
+3. Spring Security의 `DispatcherType.ERROR` 허용.
+4. 잘못된 요청 처리 중 발생한 오류가 인증 오류 `401`로 표시되는 현상 방지.
+5. 재신청 정책에 맞춰 참여 신청 API의 `409` 설명 수정.
+
+### 5. 테스트 결과
+
+1. 공개 스터디 목록 비로그인 조회 테스트.
+2. OpenAPI 페이징 파라미터 구성 테스트.
+3. 참여 신청이 존재하는 스터디 삭제 테스트.
+4. 내 신청 내역 전체 및 상태별 조회 테스트.
+5. 거절 후 재신청 및 중복 신청 차단 테스트.
+6. Maven 전체 테스트 `16개` 통과.

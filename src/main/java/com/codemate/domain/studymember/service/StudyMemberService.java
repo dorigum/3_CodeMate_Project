@@ -2,6 +2,7 @@ package com.codemate.domain.studymember.service;
 
 import com.codemate.domain.study.entity.Study;
 import com.codemate.domain.study.repository.StudyRepository;
+import com.codemate.domain.studymember.dto.MyStudyApplicationResponse;
 import com.codemate.domain.studymember.dto.StudyMemberResponse;
 import com.codemate.domain.studymember.entity.StudyMember;
 import com.codemate.domain.studymember.entity.StudyMemberStatus;
@@ -37,6 +38,19 @@ public class StudyMemberService {
                 .toList();
     }
 
+    public List<MyStudyApplicationResponse> getMyStudyApplications(Long userId, StudyMemberStatus status) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        List<StudyMember> studyMembers = status == null
+                ? studyMemberRepository.findAllByUserOrderByCreatedAtDesc(user)
+                : studyMemberRepository.findAllByUserAndStatusOrderByCreatedAtDesc(user, status);
+
+        return studyMembers.stream()
+                .map(MyStudyApplicationResponse::from)
+                .toList();
+    }
+
     @Transactional
     public StudyMemberResponse apply(Long userId, Long studyId) {
         User user = userRepository.findById(userId)
@@ -44,13 +58,15 @@ public class StudyMemberService {
         Study study = studyRepository.findById(studyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_NOT_FOUND));
 
-        validateApplicable(user, study);
+        validateStudyApplicable(user, study);
 
-        StudyMember studyMember = StudyMember.builder()
+        StudyMember studyMember = studyMemberRepository.findByStudyAndUser(study, user)
+                .map(existingApplication -> reapply(existingApplication))
+                .orElseGet(() -> StudyMember.builder()
                 .study(study)
                 .user(user)
                 .status(StudyMemberStatus.PENDING)
-                .build();
+                .build());
 
         return StudyMemberResponse.from(studyMemberRepository.save(studyMember));
     }
@@ -88,13 +104,9 @@ public class StudyMemberService {
         return StudyMemberResponse.from(studyMember);
     }
 
-    private void validateApplicable(User user, Study study) {
+    private void validateStudyApplicable(User user, Study study) {
         if (study.isHostedBy(user.getId())) {
             throw new BusinessException(ErrorCode.CANNOT_APPLY_OWN_STUDY);
-        }
-
-        if (studyMemberRepository.existsByStudyAndUser(study, user)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_STUDY_APPLICATION);
         }
 
         if (!study.isRecruiting()) {
@@ -104,6 +116,15 @@ public class StudyMemberService {
         if (study.isFull()) {
             throw new BusinessException(ErrorCode.STUDY_CAPACITY_FULL);
         }
+    }
+
+    private StudyMember reapply(StudyMember studyMember) {
+        if (!studyMember.isRejected()) {
+            throw new BusinessException(ErrorCode.DUPLICATE_STUDY_APPLICATION);
+        }
+
+        studyMember.reapply();
+        return studyMember;
     }
 
     private Study findStudy(Long studyId) {

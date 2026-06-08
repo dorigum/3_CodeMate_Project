@@ -56,6 +56,14 @@ public class StudyMember extends BaseTimeEntity {
         return status == StudyMemberStatus.PENDING;
     }
 
+    public boolean isRejected() {
+        return status == StudyMemberStatus.REJECTED;
+    }
+
+    public void reapply() {
+        this.status = StudyMemberStatus.PENDING;
+    }
+
     public void approve() {
         this.status = StudyMemberStatus.APPROVED;
     }

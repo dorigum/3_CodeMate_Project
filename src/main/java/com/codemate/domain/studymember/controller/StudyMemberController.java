@@ -56,7 +56,10 @@ public class StudyMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "본인 스터디, 모집 마감 또는 정원 초과"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 실패"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "스터디 또는 사용자 없음"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "중복 신청")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "이미 대기 중이거나 승인된 신청"
+            )
     })
     public ResponseEntity<ApiResponse<StudyMemberResponse>> apply(
             @AuthenticationPrincipal CustomUserDetails userDetails,

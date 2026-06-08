@@ -970,3 +970,118 @@ PATCH {{baseUrl}}/api/studies/{{studyId}}/members/{{memberId}}/approve
   }
 }
 ```
+
+---
+
+## 21. 내 스터디 신청 내역 조회
+
+### 21.1 사전 준비
+
+1. 신청자 계정으로 로그인한다.
+2. 로그인 응답의 `accessToken`을 환경 변수에 저장한다.
+3. 신청자 계정으로 하나 이상의 스터디에 참여 신청한다.
+
+### 21.2 전체 신청 내역 조회
+
+```http
+GET {{baseUrl}}/api/users/me/study-applications
+Authorization: Bearer {{accessToken}}
+```
+
+정상 응답 예시:
+
+```json
+{
+  "success": true,
+  "message": "내 스터디 신청 내역을 조회했습니다.",
+  "data": [
+    {
+      "applicationId": 3,
+      "studyId": 7,
+      "studyTitle": "Spring Boot 스터디",
+      "hostNickname": "host",
+      "studyStatus": "RECRUITING",
+      "applicationStatus": "PENDING",
+      "appliedAt": "2026-06-08T10:30:00"
+    }
+  ]
+}
+```
+
+### 21.3 상태별 조회
+
+Params 탭의 `status`에 아래 값 중 하나를 입력한다.
+
+```text
+PENDING
+APPROVED
+REJECTED
+```
+
+요청 예시:
+
+```http
+GET {{baseUrl}}/api/users/me/study-applications?status=APPROVED
+```
+
+상태 의미:
+
+- `PENDING`: 방장 승인 대기.
+- `APPROVED`: 참여 승인 완료.
+- `REJECTED`: 참여 신청 거절.
+
+### 21.4 확인 사항
+
+1. 신청자 토큰으로 요청한다.
+2. `applicationId`는 참여 신청 ID이며 사용자 ID와 다르다.
+3. 신청 내역이 없으면 HTTP `200`과 빈 배열 `data: []`가 반환된다.
+4. 토큰 없이 요청하면 HTTP `401`이 반환된다.
+
+---
+
+## 22. 거절 후 재신청 테스트
+
+### 22.1 테스트 순서
+
+1. 신청자 토큰으로 스터디 참여 신청.
+2. 방장 토큰으로 신청 거절.
+3. 신청자 토큰으로 내 신청 내역 조회.
+4. `applicationStatus`가 `REJECTED`인지 확인.
+5. 신청자 토큰으로 같은 스터디에 다시 참여 신청.
+6. 응답 상태가 `PENDING`인지 확인.
+
+재신청 요청:
+
+```http
+POST {{baseUrl}}/api/studies/{{studyId}}/members
+Authorization: Bearer {{accessToken}}
+```
+
+정상 응답 확인:
+
+```json
+{
+  "success": true,
+  "message": "스터디 참여 신청이 완료되었습니다.",
+  "data": {
+    "id": 3,
+    "studyId": 7,
+    "status": "PENDING"
+  }
+}
+```
+
+### 22.2 재신청 정책
+
+1. `REJECTED` 신청만 다시 신청할 수 있다.
+2. 기존 신청 데이터를 재사용하므로 `memberId`가 유지된다.
+3. `PENDING` 상태에서 다시 신청하면 HTTP `409`가 반환된다.
+4. `APPROVED` 상태에서 다시 신청하면 HTTP `409`가 반환된다.
+5. 모집이 마감됐거나 정원이 가득 찬 스터디에는 재신청할 수 없다.
+
+### 22.3 계정 전환 주의
+
+1. 신청 및 재신청은 신청자 토큰 사용.
+2. 승인 및 거절은 방장 토큰 사용.
+3. 요청 전에 `/api/users/me`로 현재 토큰의 계정을 확인.
+4. 로그인 요청의 Post-response 스크립트가 `accessToken`을 올바르게 교체했는지 확인.

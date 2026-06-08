@@ -24,7 +24,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -61,7 +63,23 @@ class CodeMateApplicationTests {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/api/users/login'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/studies'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/studies'].get.parameters[*].name")
+                        .value(hasItems("page", "size", "sort")))
+                .andExpect(jsonPath("$.paths['/api/studies'].get.parameters[*].name")
+                        .value(not(hasItems("pageable"))))
                 .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/{memberId}/approve'].patch").exists());
+    }
+
+    @Test
+    void getStudiesWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/studies")
+                        .param("keyword", "Java")
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(1));
     }
 
     @Test
@@ -247,6 +265,26 @@ class CodeMateApplicationTests {
     }
 
     @Test
+    void deleteStudyWithMemberApplication() throws Exception {
+        signup("delete-host@example.com", "delete-host", "Spring Boot");
+        signup("delete-applicant@example.com", "delete-applicant", "JPA");
+
+        String hostToken = login("delete-host@example.com");
+        String applicantToken = login("delete-applicant@example.com");
+        Integer studyId = createStudy(hostToken);
+        applyStudy(studyId, applicantToken);
+
+        mockMvc.perform(delete("/api/studies/" + studyId)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/studies/" + studyId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
     void getStudyMembers() throws Exception {
         signup("list-host@example.com", "list-host", "Spring Boot");
         signup("list-applicant@example.com", "list-applicant", "JPA");
@@ -270,6 +308,48 @@ class CodeMateApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].userNickname").value("list-applicant"));
+    }
+
+    @Test
+    void getMyStudyApplicationsByStatus() throws Exception {
+        signup("my-app-host@example.com", "my-app-host", "Spring Boot");
+        signup("my-app-user@example.com", "my-app-user", "JPA");
+
+        String hostToken = login("my-app-host@example.com");
+        String applicantToken = login("my-app-user@example.com");
+
+        Integer pendingStudyId = createStudy(hostToken);
+        Integer approvedStudyId = createStudy(hostToken);
+        Integer rejectedStudyId = createStudy(hostToken);
+
+        applyStudy(pendingStudyId, applicantToken);
+        Integer approvedMemberId = applyStudy(approvedStudyId, applicantToken);
+        Integer rejectedMemberId = applyStudy(rejectedStudyId, applicantToken);
+
+        mockMvc.perform(patch("/api/studies/" + approvedStudyId + "/members/" + approvedMemberId + "/approve")
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/api/studies/" + rejectedStudyId + "/members/" + rejectedMemberId + "/reject")
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/users/me/study-applications")
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[*].applicationStatus")
+                        .value(hasItems("PENDING", "APPROVED", "REJECTED")));
+
+        mockMvc.perform(get("/api/users/me/study-applications")
+                        .param("status", "APPROVED")
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].studyId").value(approvedStudyId))
+                .andExpect(jsonPath("$.data[0].studyTitle").isNotEmpty())
+                .andExpect(jsonPath("$.data[0].applicationStatus").value("APPROVED"));
     }
 
     @Test
@@ -406,6 +486,34 @@ class CodeMateApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.currentMemberCount").value(1))
                 .andExpect(jsonPath("$.data.status").value("RECRUITING"));
+    }
+
+    @Test
+    void rejectedStudyMemberCanReapply() throws Exception {
+        signup("reapply-host@example.com", "reapply-host", "Spring Boot");
+        signup("reapply-applicant@example.com", "reapply-applicant", "JPA");
+
+        String hostToken = login("reapply-host@example.com");
+        String applicantToken = login("reapply-applicant@example.com");
+
+        Integer studyId = createStudy(hostToken);
+        Integer memberId = applyStudy(studyId, applicantToken);
+
+        mockMvc.perform(patch("/api/studies/" + studyId + "/members/" + memberId + "/reject")
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REJECTED"));
+
+        mockMvc.perform(post("/api/studies/" + studyId + "/members")
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(memberId))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        mockMvc.perform(post("/api/studies/" + studyId + "/members")
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("이미 참여 신청한 스터디입니다."));
     }
 
     private void signup(String email, String nickname, String mainTechStack) throws Exception {

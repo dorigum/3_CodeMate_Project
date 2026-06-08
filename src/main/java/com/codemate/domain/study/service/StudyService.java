@@ -9,6 +9,7 @@ import com.codemate.domain.study.entity.Study;
 import com.codemate.domain.study.entity.StudyStatus;
 import com.codemate.domain.study.repository.StudyRepository;
 import com.codemate.domain.study.repository.StudySpecifications;
+import com.codemate.domain.studymember.repository.StudyMemberRepository;
 import com.codemate.domain.techstack.entity.StudyTechStack;
 import com.codemate.domain.techstack.entity.TechStack;
 import com.codemate.domain.techstack.repository.StudyTechStackRepository;
@@ -35,6 +36,7 @@ public class StudyService {
     private final UserRepository userRepository;
     private final TechStackRepository techStackRepository;
     private final StudyTechStackRepository studyTechStackRepository;
+    private final StudyMemberRepository studyMemberRepository;
 
     @Transactional
     public StudyResponse createStudy(Long userId, StudyCreateRequest request) {
@@ -93,7 +95,10 @@ public class StudyService {
     public void deleteStudy(Long userId, Long studyId) {
         Study study = findStudy(studyId);
         validateHost(study, userId);
+        studyMemberRepository.deleteAllByStudy(study);
         studyTechStackRepository.deleteAllByStudy(study);
+        studyMemberRepository.flush();
+        studyTechStackRepository.flush();
         studyRepository.delete(study);
     }
 
