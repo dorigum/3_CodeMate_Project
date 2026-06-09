@@ -83,7 +83,16 @@ class CodeMateApplicationTests {
                         .value(hasItems("page", "size", "sort")))
                 .andExpect(jsonPath("$.paths['/api/studies'].get.parameters[*].name")
                         .value(not(hasItems("pageable"))))
-                .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/{memberId}/approve'].patch").exists());
+                .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/{memberId}/approve'].patch").exists())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.errors").exists())
+                .andExpect(jsonPath("$.components.schemas.SignupRequest.properties.email.description")
+                        .value("로그인에 사용할 이메일"))
+                .andExpect(jsonPath("$.components.schemas.StudyCreateRequest.properties.category.example")
+                        .value("STUDY"))
+                .andExpect(jsonPath("$.paths['/api/users/signup'].post.responses['400'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath("$.paths['/api/users/signup'].post.responses['500'].content['application/json']")
+                        .exists());
     }
 
     @Test
@@ -116,6 +125,37 @@ class CodeMateApplicationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.email").value("user@example.com"))
                 .andExpect(jsonPath("$.data.nickname").value("codemate"));
+    }
+
+    @Test
+    void validationErrorResponseContainsFieldErrors() throws Exception {
+        String requestBody = """
+                {
+                  "email": "invalid-email",
+                  "password": "",
+                  "nickname": "",
+                  "mainTechStack": "Spring Boot"
+                }
+                """;
+
+        mockMvc.perform(post("/api/users/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.errors.email").value("이메일 형식이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.errors.password").value("비밀번호는 필수입니다."))
+                .andExpect(jsonPath("$.errors.nickname").value("닉네임은 필수입니다."));
+    }
+
+    @Test
+    void invalidEnumUsesCommonErrorResponse() throws Exception {
+        mockMvc.perform(get("/api/studies")
+                        .param("category", "INVALID_CATEGORY"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."));
     }
 
     @Test

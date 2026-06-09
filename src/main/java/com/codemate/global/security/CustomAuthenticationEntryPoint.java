@@ -1,18 +1,24 @@
 package com.codemate.global.security;
 
 import com.codemate.global.exception.ErrorCode;
+import com.codemate.global.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
+@RequiredArgsConstructor
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     public static final String AUTHENTICATION_ERROR_CODE = "AUTHENTICATION_ERROR_CODE";
+
+    private final ObjectMapper objectMapper;
 
     @Override
     public void commence(
@@ -28,16 +34,6 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
         response.setStatus(errorCode.getStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write(errorResponseBody(errorCode.getMessage()));
-    }
-
-    private String errorResponseBody(String message) {
-        return "{\"success\":false,\"message\":\"" + escape(message) + "\"}";
-    }
-
-    private String escape(String value) {
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"");
+        objectMapper.writeValue(response.getWriter(), ErrorResponse.of(errorCode.getMessage()));
     }
 }

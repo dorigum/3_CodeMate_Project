@@ -2228,3 +2228,249 @@ docker compose down
 7. 기존 Docker MySQL 이력의 `type=BASELINE`, `version=1`, `success=1` 확인.
 8. 실제 `codemate-app`, `codemate-mysql` 컨테이너 healthy 상태 확인.
 9. Docker 애플리케이션 `http://localhost:8081` 정상 기동 확인.
+
+
+---
+## 2026-06-09 - Swagger/OpenAPI 및 공통 예외 처리 보강
+
+### 1. 공통 오류 응답 모델
+
+1. `ErrorResponse` 추가.
+2. 기본 필드
+   - `success=false`.
+   - 오류 메시지.
+   - 선택적 필드별 검증 오류 `errors`.
+3. 검증 오류가 없는 경우 빈 `errors`는 JSON에서 제외.
+
+### 2. 입력값 검증 오류 개선
+
+1. 기존 단일 문자열 오류를 필드별 Map 구조로 변경.
+2. 동일 필드에 여러 검증 오류가 발생하면 필수값 오류 우선 반환.
+3. `@NotBlank`, `@NotNull` 메시지를 길이 검증보다 우선 처리.
+4. 프론트엔드에서 각 입력 필드 아래에 오류 메시지를 바로 표시할 수 있는 구조 제공.
+
+### 3. 예외 처리 범위 확장
+
+1. `BusinessException`.
+2. `MethodArgumentNotValidException`.
+3. `ConstraintViolationException`.
+4. 잘못된 JSON 및 enum 요청.
+5. Query Parameter와 Path Variable 타입 불일치.
+6. 필수 요청 파라미터 누락.
+7. DB 제약조건 위반.
+8. 처리되지 않은 예외의 공통 500 응답.
+9. 내부 예외 상세 내용은 응답에 노출하지 않고 서버 로그에 기록.
+
+### 4. Security 오류 응답 통일
+
+1. 인증 실패 401 응답에 `ErrorResponse` 사용.
+2. 인가 실패 403 응답에 `ErrorResponse` 사용.
+3. 문자열 직접 조립 제거.
+4. Spring Boot 4 기본 Jackson 3 `ObjectMapper`로 안전하게 JSON 직렬화.
+
+### 5. DTO Schema 문서화
+
+1. 회원가입, 로그인 요청 필드 설명과 예시.
+2. 회원가입, 로그인, 내 정보 응답 필드 설명과 예시.
+3. 스터디 생성·수정 요청 설명과 예시.
+4. 스터디 상세·목록 응답 설명과 예시.
+5. 참여 신청 및 내 신청 내역 응답 설명과 예시.
+6. 공통 성공 응답과 페이징 응답 Schema 설명.
+
+### 6. enum 문서화
+
+1. `StudyCategory`
+   - `STUDY`: 함께 학습.
+   - `MOGAKKO`: 모여서 각자 코딩.
+2. `MeetingType`
+   - `ONLINE`: 온라인.
+   - `OFFLINE`: 오프라인.
+3. `StudyStatus`
+   - 모집 중, 모집 마감, 진행 중, 종료.
+4. `StudyMemberStatus`
+   - 승인 대기, 승인, 거절.
+5. `UserRole`
+   - 일반 사용자, 관리자.
+
+### 7. OpenAPI 공통 오류 문서
+
+1. 기존 Controller의 모든 4xx·5xx 응답에 `ErrorResponse` Schema 자동 연결.
+2. 상태 코드별 공통 JSON 예시 제공.
+3. 모든 API에 공통 500 응답 추가.
+4. Controller별 반복 annotation과 문서 누락 방지를 위한 `OperationCustomizer` 적용.
+
+### 8. 테스트 보강
+
+1. OpenAPI의 `ErrorResponse` Schema 생성 확인.
+2. Signup DTO 필드 설명 확인.
+3. Study enum 예시 확인.
+4. 400 오류 응답의 Schema 참조 확인.
+5. 공통 500 응답 생성 확인.
+6. 회원가입 필드별 검증 오류 확인.
+7. 잘못된 enum 공통 400 응답 확인.
+
+### 9. 검증 결과
+
+1. Maven 테스트 22개 전체 통과.
+2. Docker 이미지 재빌드 성공.
+3. MySQL 및 애플리케이션 컨테이너 healthy 상태 확인.
+4. Flyway V1 baseline 이력 유지 확인.
+5. Docker OpenAPI에서 400 오류 Schema 참조 확인.
+6. 실제 잘못된 enum 요청에서 공통 400 JSON 확인.
+7. Docker Swagger 주소 `http://localhost:8081/swagger-ui/index.html`.
+
+
+---
+## 2026-06-09 - 핵심 기능 자동화 테스트 및 테스트 구조 정리
+
+### 1. 인증·인가 통합 테스트
+
+1. 회원가입 데이터 저장 검증.
+2. 비밀번호 BCrypt 암호화 검증.
+3. 신규 회원 기본 권한 `ROLE_USER` 검증.
+4. 이메일 및 닉네임 중복 가입 차단 검증.
+5. 잘못된 비밀번호 로그인 401 응답 검증.
+6. 토큰 누락 및 잘못된 JWT 접근 차단 검증.
+7. 정상 JWT 발급 후 내 정보 조회 검증.
+
+### 2. Study CRUD 권한 테스트
+
+1. 모집 글 목록 및 상세 조회 공개 접근 검증.
+2. 비로그인 사용자의 모집 글 생성 차단 검증.
+3. 로그인 사용자의 모집 글 생성 및 방장 지정 검증.
+4. 비방장의 모집 글 수정·삭제 403 응답 검증.
+5. 권한 실패 후 기존 모집 글 데이터 유지 검증.
+6. 방장의 모집 글 수정·삭제 성공 검증.
+
+### 3. 참여 신청 상태 전이 테스트
+
+1. 최초 신청 상태 `PENDING` 검증.
+2. `PENDING → APPROVED` 전이 검증.
+3. 승인 시 `currentMemberCount` 증가 검증.
+4. 정원 도달 시 Study 상태 `CLOSED` 전환 검증.
+5. `PENDING → REJECTED` 전이와 인원수 유지 검증.
+6. `REJECTED → PENDING` 재신청 검증.
+7. 재신청 시 기존 `memberId` 유지 검증.
+8. `PENDING` 및 `APPROVED` 상태의 중복 신청 차단 검증.
+9. 비방장의 승인·거절 차단 검증.
+10. 내 신청 목록의 상태별 조회 반영 검증.
+
+### 4. 테스트 구조 정리
+
+1. `IntegrationTestSupport` 공통 테스트 지원 클래스 추가.
+2. 공통 처리 항목
+   - 회원가입.
+   - 로그인 및 JWT 추출.
+   - 테스트용 모집 글 생성.
+   - 공통 요청 JSON 생성.
+   - JSON 응답의 ID 및 문자열 추출.
+3. 도메인별 테스트 클래스 분리
+   - `UserAuthenticationIntegrationTest`.
+   - `StudyAuthorizationIntegrationTest`.
+   - `StudyMemberStatusTransitionIntegrationTest`.
+4. 각 테스트 클래스에서 반복되던 API 준비 코드 제거.
+5. 검색, 연관 데이터 삭제, 동시 승인 검증이 남아 있는 기존 `CodeMateApplicationTests`는 후속 분리 전까지 유지.
+
+### 5. 검증 결과
+
+1. 인증·인가 테스트 6개 통과.
+2. Study CRUD 권한 테스트 6개 통과.
+3. 참여 신청 상태 전이 테스트 7개 통과.
+4. 기존 Flyway, OpenAPI, 검색, 동시 승인 테스트 포함 전체 41개 통과.
+5. Maven `BUILD SUCCESS`.
+
+
+---
+## 2026-06-09 - 운영용 prod 프로필 및 보안 환경 구성
+
+### 1. 운영 프로필 분리
+
+1. `application-prod.properties` 추가.
+2. 개발용 `mysql` 프로필과 독립된 운영 MySQL 설정 구성.
+3. 운영 DB 주소, 이름, 계정, 비밀번호를 환경변수로만 주입.
+4. JWT Secret의 개발용 기본값 제거.
+
+### 2. 운영 보안 설정
+
+1. H2 Console 비활성화.
+2. Swagger UI 비활성화.
+3. OpenAPI JSON 비활성화.
+4. Hibernate SQL 및 바인딩 값 로그 비활성화.
+5. 기본 오류 메시지, Binding Error, 예외 이름, Stack Trace 비노출.
+6. Actuator는 Health Endpoint만 노출.
+7. Health 상세 정보 비노출.
+
+### 3. 데이터베이스 및 Flyway 설정
+
+1. MySQL SSL 연결 기본 활성화.
+2. `CODEMATE_DB_USE_SSL` 환경변수로 환경별 SSL 설정 가능.
+3. 운영 환경 `ddl-auto=validate` 유지.
+4. 운영 Flyway 경로를 MySQL migration으로 지정.
+5. 운영 환경 `baseline-on-migrate=false` 적용.
+6. 기존 DB를 운영에 연결하기 전 `flyway_schema_history` 확인 필수.
+
+### 4. Docker 환경 개선
+
+1. Compose의 활성 프로필을 `SPRING_PROFILES_ACTIVE` 환경변수로 선택.
+2. 기본 Docker 개발 프로필은 `mysql`.
+3. `.env.example`에 활성 프로필과 DB SSL 설정 추가.
+4. 현재 로컬 Docker MySQL은 `CODEMATE_DB_USE_SSL=false` 사용.
+
+### 5. 테스트 보강
+
+1. `prod` 프로필 설정 검증 테스트 추가.
+2. 운영 DB URL과 환경변수 적용 검증.
+3. Swagger 및 H2 Console 비활성화 검증.
+4. SQL 출력과 Flyway 자동 baseline 비활성화 검증.
+5. 오류 Stack Trace 비노출 설정 검증.
+6. JWT Secret 환경변수 적용 검증.
+
+### 6. 검증 결과
+
+1. H2, MySQL, prod 프로필 설정 테스트 3개 통과.
+2. 기존 도메인 및 통합 테스트 포함 전체 42개 통과.
+3. Maven `BUILD SUCCESS`.
+4. 현재 개발용 Docker `.env`와 실행 중인 Swagger 환경은 변경하지 않음.
+
+
+---
+## 2026-06-09 - GitHub Actions CI 구성
+
+### 1. CI 워크플로 추가
+
+1. `.github/workflows/ci.yml` 추가.
+2. `main` 브랜치 Push 시 자동 실행.
+3. `main` 대상 Pull Request 생성 및 갱신 시 자동 실행.
+4. GitHub Actions 화면에서 수동 실행 지원.
+5. 같은 브랜치의 이전 실행은 새로운 실행 시작 시 자동 취소.
+
+### 2. Maven 자동 검증
+
+1. Ubuntu GitHub Hosted Runner 사용.
+2. Eclipse Temurin Java 17 적용.
+3. Maven 의존성 캐시 적용.
+4. Linux 환경에서 Maven Wrapper 실행 권한 부여.
+5. Maven `verify`로 컴파일, 전체 테스트, 패키징 검증.
+6. 테스트 실패 시 Surefire 리포트 Artifact 업로드.
+7. 실패 리포트 보관 기간 7일 설정.
+
+### 3. Docker 이미지 빌드 검증
+
+1. Maven Test 성공 후 Docker Build 작업 실행.
+2. Docker Buildx 적용.
+3. 프로젝트 Dockerfile 기반 이미지 빌드.
+4. 외부 Registry Push 없이 빌드 성공 여부만 확인.
+5. GitHub Actions Cache 적용.
+
+### 4. CI 보안
+
+1. GitHub Token 권한을 Repository Contents 읽기로 제한.
+2. 워크플로에 DB 비밀번호와 JWT Secret 미포함.
+3. H2 인메모리 테스트로 외부 DB Secret 의존성 제거.
+4. Docker Registry 인증 및 이미지 Push 기능 미사용.
+
+### 5. 문서화
+
+1. README에 CI 상태 Badge 추가.
+2. 실행 가이드에 자동 실행 조건과 결과 확인 방법 추가.
+3. 로컬 Maven 및 Docker 사전 검증 명령 추가.

@@ -34,12 +34,13 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: mysql
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-mysql}
       CODEMATE_DB_HOST: mysql
       CODEMATE_DB_PORT: 3306
       CODEMATE_DB_NAME: ${CODEMATE_DB_NAME:-codemate}
       CODEMATE_DB_USERNAME: ${CODEMATE_DB_USERNAME:-codemate}
       CODEMATE_DB_PASSWORD: ${CODEMATE_DB_PASSWORD}
+      CODEMATE_DB_USE_SSL: ${CODEMATE_DB_USE_SSL:-false}
       CODEMATE_JWT_SECRET: ${CODEMATE_JWT_SECRET}
       TZ: Asia/Seoul
     ports:

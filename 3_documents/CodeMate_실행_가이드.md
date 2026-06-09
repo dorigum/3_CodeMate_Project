@@ -1561,3 +1561,430 @@ Started CodeMateApplication
    - 기존 DB에 baseline 설정 없이 Flyway를 처음 적용한 경우.
 
 오류가 발생하면 기존 V1 파일을 수정하기 전에 DB 이력과 현재 적용 환경부터 확인한다.
+
+---
+
+## 26. Flyway 적용 프로젝트 통합 테스트
+
+### 26.1 자동 테스트
+
+프로젝트 루트에서 실행한다.
+
+PowerShell:
+
+```powershell
+.\mvnw.cmd test
+```
+
+cmd:
+
+```cmd
+mvnw.cmd test
+```
+
+이 테스트는 별도 MySQL 설치 없이 H2 인메모리 DB를 사용한다.
+
+검증 항목:
+
+1. Flyway가 H2에 V1 마이그레이션 적용.
+2. `flyway_schema_history` 현재 버전이 1인지 확인.
+3. Hibernate `ddl-auto=validate` 통과.
+4. 회원가입, 로그인, 스터디 CRUD, 참여 신청 흐름.
+5. Swagger/OpenAPI Schema 생성.
+6. 필드별 검증 오류와 잘못된 enum 공통 응답.
+
+정상 결과:
+
+```text
+Tests run: 22, Failures: 0, Errors: 0
+BUILD SUCCESS
+```
+
+### 26.2 Docker MySQL 실행
+
+Docker Desktop을 실행하고 프로젝트 루트에서 다음 명령을 실행한다.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env`의 비밀번호와 JWT Secret을 확인한 다음 실행한다.
+
+```powershell
+docker compose up --build -d
+docker compose ps
+```
+
+8080 포트를 다른 서버가 사용 중이면 `.env`를 다음과 같이 변경한다.
+
+```dotenv
+APP_PORT=8081
+```
+
+정상 기준:
+
+```text
+codemate-app     healthy
+codemate-mysql   healthy
+```
+
+### 26.3 Flyway 이력 확인
+
+MySQL Workbench에서 Docker MySQL에 접속한다.
+
+```text
+Host: localhost
+Port: 3307
+Username: .env의 CODEMATE_DB_USERNAME
+Password: .env의 CODEMATE_DB_PASSWORD
+Schema: codemate
+```
+
+다음 SQL을 실행한다.
+
+```sql
+SELECT installed_rank, version, description, type, success, installed_on
+FROM flyway_schema_history
+ORDER BY installed_rank;
+```
+
+기존 DB를 전환한 현재 개발 환경의 정상 예시:
+
+```text
+version=1
+description=Existing CodeMate schema
+type=BASELINE
+success=1
+```
+
+빈 DB에서 처음 실행한 정상 예시:
+
+```text
+version=1
+description=create initial schema
+type=SQL
+success=1
+```
+
+`BASELINE`과 `SQL`은 생성 경로가 다르다는 의미이며 둘 다 정상이다.
+
+### 26.4 Swagger 문서 테스트
+
+접속 주소:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+`APP_PORT=8081`이면:
+
+```text
+http://localhost:8081/swagger-ui/index.html
+```
+
+확인 항목:
+
+1. `Users > POST /api/users/signup` 펼치기.
+2. `Request body > Schema`에서 email, password, nickname 설명 확인.
+3. `Example Value`에 문서용 JSON 예시가 표시되는지 확인.
+4. `Responses > 400`에서 `ErrorResponse` Schema 확인.
+5. `Responses > 500` 공통 서버 오류 응답 확인.
+6. Study DTO의 category, meetingType, status에 enum 값과 설명 확인.
+
+### 26.5 필드별 검증 오류 테스트
+
+회원가입 요청에서 `Try it out`을 누르고 다음 JSON을 실행한다.
+
+```json
+{
+  "email": "invalid-email",
+  "password": "",
+  "nickname": "",
+  "mainTechStack": "Spring Boot"
+}
+```
+
+정상 응답:
+
+```json
+{
+  "success": false,
+  "message": "입력값이 올바르지 않습니다.",
+  "errors": {
+    "email": "이메일 형식이 올바르지 않습니다.",
+    "password": "비밀번호는 필수입니다.",
+    "nickname": "닉네임은 필수입니다."
+  }
+}
+```
+
+필드 순서는 달라질 수 있다.
+
+### 26.6 잘못된 enum 테스트
+
+`GET /api/studies`의 category에 허용되지 않은 값을 직접 요청한다.
+
+```text
+http://localhost:8081/api/studies?category=INVALID
+```
+
+정상 응답 상태는 `400`이며 응답 본문은 다음 형식이다.
+
+```json
+{
+  "success": false,
+  "message": "입력값이 올바르지 않습니다."
+}
+```
+
+### 26.7 인증 오류 테스트
+
+1. Swagger의 `Authorize`에서 기존 토큰을 제거한다.
+2. `GET /api/users/me` 실행.
+3. `401`과 다음 응답 확인.
+
+```json
+{
+  "success": false,
+  "message": "로그인이 필요합니다."
+}
+```
+
+잘못된 토큰을 입력하면 `유효하지 않은 토큰입니다.` 메시지가 반환되어야 한다.
+
+### 26.8 정상 기능 회귀 테스트
+
+오류 응답 확인 후 정상 API 흐름도 다시 확인한다.
+
+1. 회원가입.
+2. 로그인 후 access token 발급.
+3. Swagger `Authorize`에 토큰 입력.
+4. 스터디 생성.
+5. 모집 글 목록과 상세 조회.
+6. 다른 사용자로 참여 신청.
+7. 방장으로 승인 또는 거절.
+8. 내 신청 내역 상태 조회.
+9. MySQL Workbench에서 데이터 확인.
+
+Flyway는 DB 구조를 관리하고 API 데이터 자체를 초기화하지 않으므로 기존 기능은 같은 방식으로 테스트할 수 있다.
+
+## 27. 자동화 테스트 실행
+
+### 27.1 전체 테스트
+
+프로젝트 루트에서 실행한다.
+
+PowerShell:
+
+```powershell
+.\mvnw.cmd test
+```
+
+CMD:
+
+```cmd
+mvnw.cmd test
+```
+
+정상 결과:
+
+```text
+Tests run: 42, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+자동화 테스트는 기본 `h2` 프로필과 H2 인메모리 DB를 사용하므로 Docker나 로컬 MySQL을 먼저 실행하지 않아도 된다.
+
+### 27.2 인증·인가 테스트
+
+```powershell
+.\mvnw.cmd -Dtest=UserAuthenticationIntegrationTest test
+```
+
+확인 범위:
+
+1. 회원가입 및 비밀번호 암호화.
+2. 중복 이메일·닉네임.
+3. 로그인 성공·실패.
+4. JWT 인증 성공·실패.
+
+### 27.3 Study CRUD 권한 테스트
+
+```powershell
+.\mvnw.cmd -Dtest=StudyAuthorizationIntegrationTest test
+```
+
+확인 범위:
+
+1. 공개 목록·상세 조회.
+2. 로그인 사용자 생성.
+3. 방장 수정·삭제.
+4. 비방장 수정·삭제 차단.
+
+### 27.4 참여 신청 상태 전이 테스트
+
+```powershell
+.\mvnw.cmd -Dtest=StudyMemberStatusTransitionIntegrationTest test
+```
+
+확인 범위:
+
+1. `PENDING → APPROVED`.
+2. `PENDING → REJECTED`.
+3. `REJECTED → PENDING` 재신청.
+4. 중복 신청 차단.
+5. 정원 도달 시 모집 마감.
+6. 방장 승인·거절 권한.
+
+### 27.5 자동화 테스트와 Docker 테스트의 차이
+
+1. Maven 자동화 테스트
+   - H2 인메모리 DB 사용.
+   - 실행할 때마다 독립적인 테스트 데이터 사용.
+   - 코드 변경으로 발생한 회귀 오류를 빠르게 확인.
+2. Docker 통합 테스트
+   - 실제 MySQL 사용.
+   - Flyway와 Docker 볼륨을 포함한 운영 유사 환경 확인.
+   - Swagger 또는 Postman으로 수동 시나리오 확인.
+3. 배포 전에는 Maven 전체 테스트와 Docker 통합 테스트를 모두 통과시키는 것을 권장.
+
+## 28. 운영용 prod 프로필
+
+### 28.1 개발 프로필과 운영 프로필
+
+1. `h2`
+   - 기본 로컬 실행과 자동화 테스트.
+   - H2 Console 및 Swagger 사용 가능.
+2. `mysql`
+   - 로컬 MySQL 및 Docker 개발 환경.
+   - Swagger 사용 가능.
+   - 기존 개발 DB 전환을 위한 Flyway baseline 허용.
+3. `prod`
+   - 운영 MySQL 배포 환경.
+   - Swagger, OpenAPI JSON, H2 Console 비활성화.
+   - SQL 출력과 상세 오류 정보 비활성화.
+   - Flyway 자동 baseline 비활성화.
+
+### 28.2 필수 환경변수
+
+```text
+SPRING_PROFILES_ACTIVE=prod
+CODEMATE_DB_HOST=운영 DB 주소
+CODEMATE_DB_PORT=3306
+CODEMATE_DB_NAME=codemate
+CODEMATE_DB_USERNAME=운영 DB 계정
+CODEMATE_DB_PASSWORD=운영 DB 비밀번호
+CODEMATE_DB_USE_SSL=true
+CODEMATE_JWT_SECRET=충분히 긴 Base64 JWT Secret
+```
+
+`prod` 프로필에는 DB 주소, DB 이름, 계정, 비밀번호, JWT Secret의 개발용 기본값이 없다. 하나라도 누락하면 서버가 정상 기동하지 않아 잘못된 설정으로 운영되는 것을 방지한다.
+
+### 28.3 PowerShell 실행
+
+```powershell
+$env:CODEMATE_DB_HOST="운영 DB 주소"
+$env:CODEMATE_DB_PORT="3306"
+$env:CODEMATE_DB_NAME="codemate"
+$env:CODEMATE_DB_USERNAME="운영 DB 계정"
+$env:CODEMATE_DB_PASSWORD="운영 DB 비밀번호"
+$env:CODEMATE_DB_USE_SSL="true"
+$env:CODEMATE_JWT_SECRET="Base64 JWT Secret"
+
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=prod"
+```
+
+### 28.4 Docker Compose 실행
+
+`.env`에서 다음 값을 변경한다.
+
+```text
+SPRING_PROFILES_ACTIVE=prod
+CODEMATE_DB_USE_SSL=false
+```
+
+현재 Compose 내부 MySQL은 로컬 네트워크에서 실행되므로 SSL 점검용이 아니라면 `false`를 사용한다. RDS 등 TLS를 지원하는 외부 운영 DB는 `true`를 사용한다.
+
+```powershell
+docker compose up --build -d
+docker compose ps
+docker compose logs --tail 100 app
+```
+
+### 28.5 정상 확인 항목
+
+1. `/actuator/health`는 `{"status":"UP"}` 반환.
+2. `/swagger-ui/index.html`은 제공되지 않음.
+3. `/v3/api-docs`는 제공되지 않음.
+4. 시작 로그에 Hibernate SQL이 출력되지 않음.
+5. Flyway가 기존 이력을 검증하고 필요한 신규 migration만 적용.
+6. API 오류 응답에 Stack Trace와 내부 예외 내용이 포함되지 않음.
+
+### 28.6 Flyway 주의사항
+
+1. `prod`는 `baseline-on-migrate=false`이다.
+2. 기존 테이블만 있고 `flyway_schema_history`가 없는 DB에는 바로 연결하지 않는다.
+3. 운영 DB 배포 전에 백업과 Flyway 이력을 확인한다.
+4. 이미 적용된 migration 파일은 수정하지 않는다.
+5. 스키마 변경은 다음 버전 SQL 파일로 추가한다.
+
+### 28.7 배포 전 보안 점검
+
+1. `.env`를 Git에 포함하지 않는다.
+2. `.env.example`의 예시 비밀번호를 운영에서 사용하지 않는다.
+3. 개발용 JWT Secret을 운영에서 재사용하지 않는다.
+4. DB 포트는 외부 전체 공개 대신 애플리케이션 서버 또는 허용된 IP만 접근하도록 제한한다.
+5. 애플리케이션 외부 연결은 HTTPS를 사용한다.
+6. 운영 비밀값은 서버 환경변수 또는 AWS Secrets Manager 같은 비밀 저장소에서 관리한다.
+
+## 29. GitHub Actions CI
+
+### 29.1 실행 조건
+
+1. `main` 브랜치 Push.
+2. `main` 브랜치를 대상으로 하는 Pull Request.
+3. GitHub Actions 화면의 `Run workflow` 수동 실행.
+
+### 29.2 Maven Test 작업
+
+1. Ubuntu 최신 GitHub Hosted Runner 사용.
+2. Eclipse Temurin Java 17 설정.
+3. Maven 의존성 캐시 사용.
+4. Maven Wrapper 실행 권한 설정.
+5. 다음 명령으로 전체 테스트와 패키징 검증.
+
+```bash
+./mvnw --batch-mode --no-transfer-progress verify
+```
+
+6. 테스트 실패 시 `target/surefire-reports`를 7일 동안 Artifact로 보관.
+
+### 29.3 Docker Build 작업
+
+1. Maven Test 성공 후에만 실행.
+2. Docker Buildx 사용.
+3. 프로젝트 `Dockerfile`로 이미지 빌드.
+4. Registry에는 Push하지 않고 빌드 가능 여부만 검증.
+5. GitHub Actions Cache로 다음 빌드 시간 단축.
+
+### 29.4 GitHub에서 결과 확인
+
+1. 원격 저장소의 `Actions` 탭으로 이동.
+2. `CI` 워크플로 선택.
+3. 실행 내역에서 `Maven Test`와 `Docker Build` 상태 확인.
+4. 초록색 체크는 두 작업 모두 성공했다는 의미.
+5. 테스트 실패 시 실행 상세 화면의 `Artifacts`에서 Surefire 리포트 다운로드.
+
+### 29.5 로컬 사전 검증
+
+```powershell
+.\mvnw.cmd verify
+docker build -t codemate:local-check .
+```
+
+### 29.6 CI 보안 설정
+
+1. GitHub Token 권한은 Repository Contents 읽기 전용.
+2. `.env` 및 운영 Secret을 워크플로에 직접 작성하지 않음.
+3. H2 인메모리 DB를 사용하므로 DB 비밀번호 Secret이 필요하지 않음.
+4. Docker 이미지는 빌드만 하며 외부 Registry에 Push하지 않음.

@@ -1,5 +1,7 @@
 # 🦄CodeMate
 
+[![CI](https://github.com/dorigum/3_CodeMate_Project/actions/workflows/ci.yml/badge.svg)](https://github.com/dorigum/3_CodeMate_Project/actions/workflows/ci.yml)
+
 개발자를 위한 스터디(프로젝트 형태) 및 모각코(모여서 각자 코딩, 원데이 스터디) 모집·참여 관리 백엔드 API 프로젝트입니다.
 
 단순한 모집 게시판을 넘어 회원 인증, 참여 신청, 방장 승인·거절, 모집 인원 관리 등 실제 스터디 운영 과정에서 필요한 비즈니스 흐름을 구현합니다.
@@ -18,7 +20,8 @@
 - 정원 도달 시 모집 상태 자동 마감
 - 동시 승인 시 비관적 락을 통한 모집 정원 초과 방지
 - 인증·인가 및 비즈니스 예외 응답 형식 통일
-- Swagger UI와 OpenAPI 기반 API 문서화
+- 필드 설명, JSON 예시, 공통 오류 Schema가 포함된 Swagger/OpenAPI 문서화
+- Flyway 기반 H2/MySQL 스키마 버전 관리
 
 ## 기술 스택
 
@@ -120,6 +123,34 @@ $env:CODEMATE_DB_PASSWORD="비밀번호"
 
 MySQL 프로필에서는 H2 Console이 비활성화됩니다.
 
+## 운영 프로필
+
+`prod` 프로필은 운영 배포를 위한 독립 MySQL 설정입니다.
+
+```powershell
+$env:CODEMATE_DB_HOST="운영 DB 주소"
+$env:CODEMATE_DB_PORT="3306"
+$env:CODEMATE_DB_NAME="codemate"
+$env:CODEMATE_DB_USERNAME="운영 DB 계정"
+$env:CODEMATE_DB_PASSWORD="운영 DB 비밀번호"
+$env:CODEMATE_DB_USE_SSL="true"
+$env:CODEMATE_JWT_SECRET="충분히 긴 Base64 JWT Secret"
+
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=prod"
+```
+
+운영 프로필의 기본 보안 설정:
+
+- Swagger UI와 OpenAPI JSON 비활성화
+- H2 Console 비활성화
+- Hibernate SQL 출력 비활성화
+- 오류 상세 메시지와 Stack Trace 비노출
+- Flyway 자동 baseline 비활성화
+- DB 접속 정보와 JWT Secret 환경변수 필수
+- MySQL SSL 기본 활성화
+
+실제 운영 DB는 배포 전에 Flyway 이력이 준비되어 있어야 합니다.
+
 ## DB 마이그레이션
 
 Flyway가 애플리케이션 시작 시 DB 스키마 버전을 확인하고 필요한 SQL을 순서대로 적용합니다.
@@ -145,6 +176,8 @@ Copy-Item .env.example .env
 ```
 
 `.env`의 DB 비밀번호, MySQL root 비밀번호, JWT Secret을 실제 개발용 값으로 변경한 뒤 실행합니다.
+
+개발용 Docker 실행은 `.env`의 `SPRING_PROFILES_ACTIVE=mysql`을 사용합니다. 운영 설정을 점검할 때는 `prod`로 변경하며, 이 경우 Swagger가 열리지 않는 것이 정상입니다.
 
 ```powershell
 docker compose up --build -d
@@ -236,7 +269,8 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 
 ## 향후 계획
 
-- 공통 예외 처리 및 Swagger Schema 보강
+- Testcontainers 기반 MySQL 자동 통합 테스트
+- 회원 정보 수정, 비밀번호 변경, 로그아웃 및 토큰 재발급
 
 ---
-*Updated at_2026.06.08*
+*Updated at_2026.06.09*

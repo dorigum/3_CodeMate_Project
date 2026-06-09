@@ -56,4 +56,39 @@ class ProfileConfigurationTests {
                             .isEqualTo("classpath:db/migration/mysql");
                 });
     }
+
+    @Test
+    void prodProfileUsesSecureProductionDefaults() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "CODEMATE_DB_HOST=prod-db.example.com",
+                        "CODEMATE_DB_PORT=3306",
+                        "CODEMATE_DB_NAME=codemate_prod",
+                        "CODEMATE_DB_USERNAME=codemate_prod_user",
+                        "CODEMATE_DB_PASSWORD=prod-db-password",
+                        "CODEMATE_JWT_SECRET=Y29kZW1hdGUtcHJvZHVjdGlvbi1qd3Qtc2VjcmV0LWtleS10ZXN0"
+                )
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getEnvironment().getActiveProfiles())
+                            .containsExactly("prod");
+                    assertThat(context.getEnvironment().getProperty("spring.datasource.url"))
+                            .startsWith("jdbc:mysql://prod-db.example.com:3306/codemate_prod");
+                    assertThat(context.getEnvironment().getProperty("spring.h2.console.enabled"))
+                            .isEqualTo("false");
+                    assertThat(context.getEnvironment().getProperty("spring.jpa.show-sql"))
+                            .isEqualTo("false");
+                    assertThat(context.getEnvironment().getProperty("spring.flyway.baseline-on-migrate"))
+                            .isEqualTo("false");
+                    assertThat(context.getEnvironment().getProperty("springdoc.api-docs.enabled"))
+                            .isEqualTo("false");
+                    assertThat(context.getEnvironment().getProperty("springdoc.swagger-ui.enabled"))
+                            .isEqualTo("false");
+                    assertThat(context.getEnvironment().getProperty("server.error.include-stacktrace"))
+                            .isEqualTo("never");
+                    assertThat(context.getEnvironment().getProperty("codemate.jwt.secret"))
+                            .isEqualTo("Y29kZW1hdGUtcHJvZHVjdGlvbi1qd3Qtc2VjcmV0LWtleS10ZXN0");
+                });
+    }
 }
