@@ -205,7 +205,8 @@ class CodeMateApplicationTests {
 
         Integer studyId = JsonPath.read(createResult.getResponse().getContentAsString(), "$.data.id");
 
-        mockMvc.perform(get("/api/studies"))
+        mockMvc.perform(get("/api/studies")
+                        .param("keyword", "Spring Boot 스터디"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.items[*].id").value(hasItems(studyId)));
