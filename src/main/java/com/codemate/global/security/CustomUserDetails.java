@@ -15,6 +15,7 @@ public class CustomUserDetails implements UserDetails {
     private final String email;
     private final String password;
     private final String nickname;
+    private final long tokenVersion;
     private final Collection<? extends GrantedAuthority> authorities;
 
     private CustomUserDetails(User user) {
@@ -22,6 +23,7 @@ public class CustomUserDetails implements UserDetails {
         this.email = user.getEmail();
         this.password = user.getPassword();
         this.nickname = user.getNickname();
+        this.tokenVersion = user.getTokenVersion();
         this.authorities = List.of(new SimpleGrantedAuthority(user.getRole().name()));
     }
 

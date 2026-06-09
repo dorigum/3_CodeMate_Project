@@ -9,7 +9,12 @@
 ## 주요 기능
 
 - Spring Security와 JWT 기반 회원가입·로그인
+- Access Token·Refresh Token 분리와 토큰 재발급
+- Refresh Token 회전 및 해시 저장
+- 로그아웃·비밀번호 변경 시 기존 JWT 즉시 무효화
 - 로그인 사용자 정보 조회
+- 로그인 사용자 닉네임·주요 기술 스택 수정
+- 현재 비밀번호 확인 기반 비밀번호 변경
 - 스터디 및 모각코 모집 글 CRUD
 - 키워드·카테고리·모집 상태·진행 방식·지역·기술 스택 기반 검색과 페이징
 - 기술 스택 등록 및 스터디 연결
@@ -18,6 +23,7 @@
 - 참여 신청 승인·거절
 - 승인 시 현재 인원 증가
 - 정원 도달 시 모집 상태 자동 마감
+- 방장의 스터디 모집 수동 마감
 - 동시 승인 시 비관적 락을 통한 모집 정원 초과 방지
 - 인증·인가 및 비즈니스 예외 응답 형식 통일
 - 필드 설명, JSON 예시, 공통 오류 Schema가 포함된 Swagger/OpenAPI 문서화
@@ -34,7 +40,7 @@
 | Security | Spring Security, JWT |
 | Database | H2, MySQL 8.4 |
 | Build | Maven, Maven Wrapper |
-| Test | JUnit 5, MockMvc, Spring Security Test |
+| Test | JUnit 5, MockMvc, Spring Security Test, Testcontainers |
 | API Docs | springdoc-openapi, Swagger UI |
 
 ## 주요 도메인
@@ -67,6 +73,14 @@ cd 3_CodeMate
 
 ```powershell
 .\mvnw.cmd test
+```
+
+Docker Desktop이 실행 중이면 Testcontainers가 임시 MySQL 8.4 컨테이너를 생성해 MySQL 전용 Flyway 마이그레이션과 핵심 API 흐름도 함께 검증합니다. Docker를 사용할 수 없는 로컬 환경에서는 MySQL 통합 테스트만 건너뛰고 나머지 테스트를 실행합니다.
+
+MySQL 통합 테스트만 실행:
+
+```powershell
+.\mvnw.cmd "-Dtest=MySqlTestcontainersIntegrationTest" test
 ```
 
 ### JWT Secret 설정
@@ -214,7 +228,7 @@ docker compose down -v
 JWT 인증이 필요한 API 테스트 순서:
 
 1. `POST /api/users/signup`으로 회원가입
-2. `POST /api/users/login`으로 로그인
+2. `POST /api/users/login`으로 access token과 refresh token 발급
 3. 응답의 `data.accessToken` 복사
 4. Swagger UI 상단 `Authorize` 클릭
 5. 토큰 값만 입력하고 인증
@@ -228,12 +242,17 @@ JWT 인증이 필요한 API 테스트 순서:
 |---|---|---|---|
 | `POST` | `/api/users/signup` | 회원가입 | 불필요 |
 | `POST` | `/api/users/login` | 로그인 및 JWT 발급 | 불필요 |
+| `POST` | `/api/users/token/refresh` | JWT 토큰 쌍 재발급 | 불필요 |
+| `POST` | `/api/users/logout` | 로그아웃 및 기존 토큰 무효화 | 필요 |
 | `GET` | `/api/users/me` | 내 정보 조회 | 필요 |
+| `PATCH` | `/api/users/me` | 닉네임 및 주요 기술 스택 수정 | 필요 |
+| `PATCH` | `/api/users/me/password` | 비밀번호 변경 | 필요 |
 | `GET` | `/api/users/me/study-applications` | 내 참여 신청 및 처리 상태 조회 | 필요 |
 | `POST` | `/api/studies` | 모집 글 생성 | 필요 |
 | `GET` | `/api/studies` | 모집 글 목록 조회 | 불필요 |
 | `GET` | `/api/studies/{studyId}` | 모집 글 상세 조회 | 불필요 |
 | `PATCH` | `/api/studies/{studyId}` | 모집 글 수정 | 방장 |
+| `PATCH` | `/api/studies/{studyId}/close` | 스터디 모집 수동 마감 | 방장 |
 | `DELETE` | `/api/studies/{studyId}` | 모집 글 삭제 | 방장 |
 | `POST` | `/api/studies/{studyId}/members` | 참여 신청 | 필요 |
 | `GET` | `/api/studies/{studyId}/members` | 참여 신청 목록 조회 | 방장 |
@@ -269,8 +288,7 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 
 ## 향후 계획
 
-- Testcontainers 기반 MySQL 자동 통합 테스트
-- 회원 정보 수정, 비밀번호 변경, 로그아웃 및 토큰 재발급
+- 회원 탈퇴와 스터디 운영 상태 전환
 
 ---
 *Updated at_2026.06.09*

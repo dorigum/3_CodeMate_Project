@@ -18,9 +18,9 @@ concurrency:
 
 jobs:
   test:
-    name: Maven Test
+    name: Maven and MySQL Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -35,6 +35,9 @@ jobs:
 
       - name: Grant Maven Wrapper permission
         run: chmod +x mvnw
+
+      - name: Verify Docker for Testcontainers
+        run: docker info
 
       - name: Run tests
         run: ./mvnw --batch-mode --no-transfer-progress verify

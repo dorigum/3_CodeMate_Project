@@ -2,7 +2,6 @@ package com.codemate.domain.study.dto;
 
 import com.codemate.domain.study.entity.MeetingType;
 import com.codemate.domain.study.entity.StudyCategory;
-import com.codemate.domain.study.entity.StudyStatus;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,13 +36,6 @@ public record StudyUpdateRequest(
         @Schema(description = "방장을 포함한 최대 인원", example = "6", minimum = "2")
         @Min(value = 2, message = "모집 인원은 최소 2명 이상이어야 합니다.")
         int maxMemberCount,
-
-        @Schema(
-                description = "모집 상태. RECRUITING: 모집 중, CLOSED: 모집 마감, IN_PROGRESS: 진행 중, FINISHED: 종료",
-                example = "RECRUITING"
-        )
-        @NotNull(message = "모집 상태는 필수입니다.")
-        StudyStatus status,
 
         @Schema(description = "사용 기술 스택 목록", example = "[\"Java\",\"Spring Boot\",\"Docker\"]")
         @Size(max = 10, message = "기술 스택은 최대 10개까지 선택할 수 있습니다.")

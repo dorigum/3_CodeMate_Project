@@ -87,8 +87,7 @@ public class Study extends BaseTimeEntity {
             StudyCategory category,
             MeetingType meetingType,
             String location,
-            int maxMemberCount,
-            StudyStatus status
+            int maxMemberCount
     ) {
         this.title = title;
         this.content = content;
@@ -96,7 +95,6 @@ public class Study extends BaseTimeEntity {
         this.meetingType = meetingType;
         this.location = location;
         this.maxMemberCount = maxMemberCount;
-        this.status = status;
     }
 
     public boolean isHostedBy(Long userId) {
@@ -117,5 +115,9 @@ public class Study extends BaseTimeEntity {
         if (isFull()) {
             this.status = StudyStatus.CLOSED;
         }
+    }
+
+    public void closeRecruitment() {
+        this.status = StudyStatus.CLOSED;
     }
 }

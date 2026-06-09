@@ -127,6 +127,27 @@ public class StudyController {
         return ResponseEntity.ok(ApiResponse.success("스터디 모집 글이 수정되었습니다.", response));
     }
 
+    @PatchMapping("/{studyId}/close")
+    @Operation(
+            summary = "스터디 모집 수동 마감",
+            description = "방장이 모집 중인 스터디의 참여 신청 접수를 수동으로 마감합니다.",
+            security = @SecurityRequirement(name = OpenApiConfig.JWT_SECURITY_SCHEME)
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "모집 마감 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 실패"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "방장 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "모집 글 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 모집 마감")
+    })
+    public ResponseEntity<ApiResponse<StudyResponse>> closeRecruitment(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long studyId
+    ) {
+        StudyResponse response = studyService.closeRecruitment(userDetails.getId(), studyId);
+        return ResponseEntity.ok(ApiResponse.success("스터디 모집을 마감하였습니다.", response));
+    }
+
     @DeleteMapping("/{studyId}")
     @Operation(
             summary = "모집 글 삭제",

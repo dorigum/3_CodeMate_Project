@@ -8,10 +8,30 @@ public record LoginResponse(
         String tokenType,
 
         @Schema(description = "JWT access token", example = "eyJhbGciOiJIUzI1NiJ9.example.signature")
-        String accessToken
+        String accessToken,
+
+        @Schema(description = "JWT refresh token", example = "eyJhbGciOiJIUzI1NiJ9.example.signature")
+        String refreshToken,
+
+        @Schema(description = "access token 만료 시간(초)", example = "3600")
+        long accessTokenExpiresIn,
+
+        @Schema(description = "refresh token 만료 시간(초)", example = "1209600")
+        long refreshTokenExpiresIn
 ) {
 
-    public static LoginResponse bearer(String accessToken) {
-        return new LoginResponse("Bearer", accessToken);
+    public static LoginResponse bearer(
+            String accessToken,
+            String refreshToken,
+            long accessTokenExpiresIn,
+            long refreshTokenExpiresIn
+    ) {
+        return new LoginResponse(
+                "Bearer",
+                accessToken,
+                refreshToken,
+                accessTokenExpiresIn,
+                refreshTokenExpiresIn
+        );
     }
 }

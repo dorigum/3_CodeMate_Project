@@ -55,8 +55,7 @@ public class StudyMemberService {
     public StudyMemberResponse apply(Long userId, Long studyId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        Study study = studyRepository.findById(studyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_NOT_FOUND));
+        Study study = findStudyForUpdate(studyId);
 
         validateStudyApplicable(user, study);
 

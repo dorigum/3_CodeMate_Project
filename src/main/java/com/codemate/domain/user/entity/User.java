@@ -40,6 +40,9 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private UserRole role;
 
+    @Column(nullable = false)
+    private long tokenVersion;
+
     @Builder
     private User(String email, String password, String nickname, String mainTechStack, UserRole role) {
         this.email = email;
@@ -47,5 +50,18 @@ public class User extends BaseTimeEntity {
         this.nickname = nickname;
         this.mainTechStack = mainTechStack;
         this.role = role;
+    }
+
+    public void updateProfile(String nickname, String mainTechStack) {
+        this.nickname = nickname;
+        this.mainTechStack = mainTechStack;
+    }
+
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
+    public void invalidateTokens() {
+        this.tokenVersion++;
     }
 }

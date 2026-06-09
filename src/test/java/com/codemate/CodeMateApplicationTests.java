@@ -60,7 +60,7 @@ class CodeMateApplicationTests {
 
     @Test
     void flywayMigrationIsApplied() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
     }
 
     @Test
@@ -78,7 +78,12 @@ class CodeMateApplicationTests {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/api/users/login'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/users/token/refresh'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/users/logout'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/users/me'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/users/me/password'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/studies'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/studies/{studyId}/close'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/studies'].get.parameters[*].name")
                         .value(hasItems("page", "size", "sort")))
                 .andExpect(jsonPath("$.paths['/api/studies'].get.parameters[*].name")
@@ -224,7 +229,6 @@ class CodeMateApplicationTests {
                   "meetingType": "OFFLINE",
                   "location": "강남",
                   "maxMemberCount": 5,
-                  "status": "RECRUITING",
                   "techStackNames": ["Java", "Spring Security"]
                 }
                 """;

@@ -83,8 +83,7 @@ public class StudyService {
                 request.category(),
                 request.meetingType(),
                 request.location(),
-                request.maxMemberCount(),
-                request.status()
+                request.maxMemberCount()
         );
         syncTechStacks(study, request.techStackNames());
 
@@ -100,6 +99,24 @@ public class StudyService {
         studyMemberRepository.flush();
         studyTechStackRepository.flush();
         studyRepository.delete(study);
+    }
+
+    @Transactional
+    public StudyResponse closeRecruitment(Long userId, Long studyId) {
+        Study study = findStudyForUpdate(studyId);
+        validateHost(study, userId);
+
+        if (!study.isRecruiting()) {
+            throw new BusinessException(ErrorCode.STUDY_RECRUITMENT_ALREADY_CLOSED);
+        }
+
+        study.closeRecruitment();
+        return StudyResponse.from(study, getTechStackNames(study));
+    }
+
+    private Study findStudyForUpdate(Long studyId) {
+        return studyRepository.findByIdForUpdate(studyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_NOT_FOUND));
     }
 
     private Study findStudy(Long studyId) {

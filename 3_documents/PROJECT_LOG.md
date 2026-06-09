@@ -2474,3 +2474,320 @@ docker compose down
 1. README에 CI 상태 Badge 추가.
 2. 실행 가이드에 자동 실행 조건과 결과 확인 방법 추가.
 3. 로컬 Maven 및 Docker 사전 검증 명령 추가.
+
+
+---
+## 2026-06-09 - GitHub Actions CI 테스트 실패 트러블슈팅
+
+### 1. 문제 상황
+
+1. GitHub Actions 최초 실행에서 `Maven Test` 작업 실패.
+2. Maven 프로세스가 Exit Code 1로 종료.
+3. 후속 작업인 `Docker Build`는 Maven Test 실패로 실행되지 않음.
+4. 실패한 테스트의 Surefire 리포트가 Artifact로 정상 업로드됨.
+5. 로컬에서는 전체 테스트가 통과했지만 GitHub Actions의 테스트 실행 순서에서는 동일 문제가 재현됨.
+
+### 2. 최초 실패 원인
+
+1. `CodeMateApplicationTests.studyCrud()`에서 모집 글 목록의 첫 번째 항목을 검증.
+2. 테스트 코드가 방금 생성한 모집 글이 항상 `items[0]`에 위치한다고 가정.
+3. GitHub Actions에서는 다른 테스트가 먼저 생성한 `"신청 대기 상태"` 모집 글이 첫 번째 항목으로 반환됨.
+4. 테스트 클래스 실행 순서와 기존 테스트 데이터에 따라 결과가 달라지는 순서 의존성 확인.
+5. 실제 서비스 로직 문제가 아닌 테스트 검증 방식 문제로 판별.
+
+### 3. 1차 수정 및 추가 실패
+
+1. 목록의 첫 번째 항목을 확인하는 검증 제거.
+2. 전체 목록 ID에 생성한 `studyId`가 포함되는지 검증하도록 변경.
+3. 로컬 Maven `verify` 실행 결과 전체 42개 테스트 통과.
+4. 수정 커밋 `6f74763` Push 후 GitHub Actions 재실행.
+5. GitHub Actions에서 생성된 모집 글 ID는 `13`이었으나 기본 목록 크기가 10건으로 제한됨.
+6. 첫 페이지에는 ID 1부터 10까지만 반환되어 생성한 ID 13을 찾지 못하고 다시 실패.
+7. 테스트가 목록 순서뿐 아니라 기본 페이지 크기에도 의존하고 있음을 추가 확인.
+
+### 4. 최종 해결
+
+1. 모집 글 목록 조회 시 방금 생성한 제목 `"Spring Boot 스터디"`를 검색 키워드로 전달.
+2. 검색 결과에 생성한 `studyId`가 포함되는지 검증.
+3. 다른 테스트 데이터의 개수, 생성 순서, 기본 페이지 크기와 무관하게 검증 가능하도록 개선.
+4. 수정 커밋 `166bd76` Push 후 GitHub Actions 재실행.
+
+### 5. 최종 검증 결과
+
+1. 로컬 Maven `verify` 전체 42개 테스트 통과.
+2. GitHub Actions `Maven Test` 성공.
+3. GitHub Actions `Docker Build` 성공.
+4. 전체 CI 워크플로 최종 성공.
+5. 성공 실행 번호 `27187694178`.
+6. 성공 실행 주소 `https://github.com/dorigum/3_CodeMate_Project/actions/runs/27187694178`.
+
+### 6. 개선 사항
+
+1. 목록 API 테스트에서 특정 배열 위치를 고정해 검증하지 않음.
+2. 페이징 API는 검색 조건 또는 명시적인 페이지 설정으로 대상 데이터를 한정.
+3. 각 테스트가 다른 테스트의 데이터와 실행 순서에 영향을 받지 않도록 작성.
+4. 로컬 테스트 성공 후에도 GitHub Actions의 Java 및 운영체제 환경에서 최종 검증.
+5. CI 실패 시 업로드되는 Surefire Artifact와 Actions 로그를 함께 확인.
+
+
+---
+## 2026-06-09 - 스터디 모집 수동 마감 기능
+
+### 1. 모집 마감 API
+
+1. `PATCH /api/studies/{studyId}/close` API 추가.
+2. 요청 Body 없이 로그인한 방장의 사용자 정보와 `studyId` 사용.
+3. 모집 중인 `RECRUITING` 상태를 `CLOSED`로 변경.
+4. 변경된 스터디 정보를 공통 응답 형식으로 반환.
+
+### 2. 권한 및 상태 검증
+
+1. 스터디 방장만 모집 마감 가능.
+2. 비로그인 사용자는 HTTP `401` 응답.
+3. 방장이 아닌 사용자는 HTTP `403` 응답.
+4. 이미 마감된 스터디의 중복 마감은 HTTP `409` 응답.
+5. 마감된 스터디에 대한 신규 참여 신청은 HTTP `400` 응답.
+6. 모집 마감과 참여 신청의 동시 처리 충돌을 줄이기 위해 스터디 조회에 비관적 락 적용.
+
+### 3. 상태 변경 책임 분리
+
+1. `StudyUpdateRequest`에서 `status` 필드 제거.
+2. 일반 모집 글 수정 API에서는 제목, 내용, 유형, 진행 방식, 장소, 정원, 기술 스택만 수정.
+3. 모집 상태 변경은 전용 모집 마감 API와 정원 도달 로직에서 처리.
+4. 일반 수정 API를 통한 임의 상태 변경과 마감 상태 재개방 방지.
+
+### 4. 테스트 및 문서 보강
+
+1. 방장의 수동 모집 마감 성공 테스트 추가.
+2. 비방장의 모집 마감 차단 테스트 추가.
+3. 중복 모집 마감 차단 테스트 추가.
+4. 모집 마감 후 신규 참여 신청 차단 테스트 추가.
+5. OpenAPI 문서에 수동 마감 경로 생성 검증 추가.
+6. README 대표 기능과 API 목록 업데이트.
+7. CodeMate 실행 가이드에 Swagger 및 Postman 테스트 절차 추가.
+
+### 5. 현재 제외 범위
+
+1. 모집 마감 일시 필드 미구현.
+2. 스케줄러 기반 자동 모집 마감 미구현.
+3. 스터디 시작 및 종료 상태 전환은 후속 작업으로 분리.
+
+### 6. 검증 결과
+
+1. 수동 모집 마감 관련 테스트 4개 추가.
+2. 기존 인증, Study CRUD, 참여 신청 상태 전이 테스트 회귀 검증.
+3. 전체 테스트 46개 통과.
+4. Maven `BUILD SUCCESS`.
+
+
+---
+## 2026-06-09 - Testcontainers 기반 MySQL 통합 테스트
+
+### 1. 테스트 환경 구성
+
+1. Testcontainers `2.0.5` 적용.
+2. `testcontainers-junit-jupiter` 테스트 의존성 추가.
+3. `testcontainers-mysql` 테스트 의존성 추가.
+4. Spring Boot `spring-boot-testcontainers` 의존성 추가.
+5. 프로젝트 운영 DB 버전과 동일한 MySQL 8.4 이미지 사용.
+
+### 2. Spring Boot 연동
+
+1. `MySqlTestcontainersIntegrationTest` 추가.
+2. 테스트 클래스에 `mysql` 프로필 적용.
+3. 정적 MySQL 컨테이너를 테스트 클래스 전체에서 공유.
+4. `@ServiceConnection`으로 임시 JDBC URL, 사용자명, 비밀번호 자동 주입.
+5. 테스트용 신규 DB에서는 Flyway baseline을 사용하지 않고 V1부터 마이그레이션.
+6. 테스트 종료 시 MySQL 컨테이너와 임시 데이터 자동 제거.
+
+### 3. MySQL 및 Flyway 검증
+
+1. MySQL 컨테이너 실행 상태 확인.
+2. JDBC Database Product가 MySQL인지 확인.
+3. MySQL 전용 Flyway V1 마이그레이션 적용 확인.
+4. 현재 Flyway Schema 버전 `1` 확인.
+5. `study_members` 테이블 생성 확인.
+6. Hibernate `ddl-auto=validate`를 통한 Entity와 실제 MySQL Schema 일치 검증.
+
+### 4. 핵심 API 흐름 검증
+
+1. 실제 MySQL에 회원가입 데이터 저장.
+2. 로그인 및 JWT 발급.
+3. 스터디와 기술 스택 데이터 저장.
+4. 방장의 수동 모집 마감.
+5. 마감 상태 `CLOSED` 저장 및 상세 조회 확인.
+6. 한글 제목 저장과 조회 확인.
+
+### 5. GitHub Actions 보강
+
+1. Maven 작업 이름을 `Maven and MySQL Tests`로 변경.
+2. 테스트 제한 시간을 20분으로 조정.
+3. Maven 실행 전 `docker info`로 Docker 사용 가능 여부 확인.
+4. GitHub Hosted Runner에서 Testcontainers MySQL 테스트 자동 실행.
+5. MySQL 통합 테스트가 성공한 경우에만 Docker 이미지 빌드 실행.
+
+### 6. 로컬 실행 정책
+
+1. Docker Desktop 실행 시 H2 및 MySQL 통합 테스트 모두 수행.
+2. Docker를 사용할 수 없는 환경에서는 MySQL 통합 테스트만 건너뜀.
+3. 별도의 로컬 MySQL 계정, 데이터베이스, 포트 또는 `.env` 설정 불필요.
+4. MySQL 통합 테스트 단독 실행 명령을 README와 실행 가이드에 기록.
+
+### 7. 최종 검증 결과
+
+1. Docker Desktop 29.5.2 연결 성공.
+2. Testcontainers Ryuk 리소스 정리 컨테이너 실행 성공.
+3. 임시 MySQL 8.4 컨테이너 실행 성공.
+4. MySQL 전용 Flyway V1 적용 성공.
+5. MySQL 통합 테스트 2개 통과.
+6. 기존 H2 및 프로필 테스트 46개 회귀 검증 성공.
+7. 전체 테스트 48개 통과.
+8. Maven `BUILD SUCCESS`.
+9. Testcontainers 의존성이 포함된 애플리케이션 Docker 이미지 빌드 성공.
+
+
+---
+## 2026-06-09 - 회원 기능 보강
+
+### 1. 회원 정보 수정
+
+1. `PATCH /api/users/me` API 추가.
+2. 로그인 사용자의 닉네임과 주요 기술 스택 수정.
+3. 다른 회원이 사용 중인 닉네임으로 변경 시 HTTP `409`.
+4. 현재 닉네임을 유지하면서 주요 기술 스택만 변경 가능.
+5. 로그인 식별자로 사용하는 이메일은 수정 대상에서 제외.
+
+### 2. 비밀번호 변경
+
+1. `PATCH /api/users/me/password` API 추가.
+2. 현재 비밀번호를 BCrypt로 검증한 후 변경.
+3. 현재 비밀번호 불일치 시 HTTP `400`.
+4. 현재 비밀번호와 동일한 새 비밀번호 사용 차단.
+5. 새 비밀번호를 BCrypt로 다시 암호화하여 저장.
+6. 비밀번호 길이를 8자 이상 30자 이하로 검증.
+
+### 3. 도메인 및 예외 처리
+
+1. `User.updateProfile` 도메인 변경 메서드 추가.
+2. `User.changePassword` 도메인 변경 메서드 추가.
+3. 본인을 제외한 닉네임 중복 조회 Repository 메서드 추가.
+4. `INVALID_CURRENT_PASSWORD` 오류 코드 추가.
+5. `SAME_AS_CURRENT_PASSWORD` 오류 코드 추가.
+
+### 4. Swagger/OpenAPI
+
+1. 회원 정보 수정 요청 DTO Schema와 예시 추가.
+2. 비밀번호 변경 요청 DTO Schema와 예시 추가.
+3. 두 API에 JWT 보안 요구사항과 상태 코드 설명 추가.
+4. OpenAPI 문서 경로 생성 자동화 검증 추가.
+
+### 5. 자동화 테스트
+
+1. `UserProfileIntegrationTest` 분리.
+2. 회원 정보 수정 성공 검증.
+3. 기존 닉네임 유지와 기술 스택 변경 검증.
+4. 닉네임 중복 및 인증 실패 검증.
+5. 현재 비밀번호 불일치 및 동일 비밀번호 변경 차단 검증.
+6. 새 비밀번호 BCrypt 저장 검증.
+7. 기존 비밀번호 로그인 실패와 새 비밀번호 로그인 성공 검증.
+
+### 6. 현재 제외 범위
+
+1. 이메일 변경.
+2. 회원 탈퇴.
+3. 이미 발급된 access token의 즉시 폐기.
+4. 로그아웃 및 Refresh Token 기반 재발급.
+
+### 7. 최종 검증 결과
+
+1. 회원 기능 보강 통합 테스트 6개 통과.
+2. OpenAPI 신규 경로 생성 검증 통과.
+3. 기존 Study CRUD 및 참여 신청 상태 전이 회귀 검증 통과.
+4. Testcontainers MySQL 8.4 통합 테스트 통과.
+5. 전체 테스트 54개 통과.
+6. 실패, 오류, 건너뜀 0개.
+7. Maven `verify` 및 JAR 패키징 성공.
+
+
+---
+## 2026-06-09 - JWT 인증 개선
+
+### 1. Access Token 및 Refresh Token 분리
+
+1. 로그인 응답에 Access Token과 Refresh Token 함께 반환.
+2. Access Token 기본 유효 시간 1시간.
+3. Refresh Token 기본 유효 시간 14일.
+4. 각 JWT에 `tokenType`, `tokenVersion`, `jti` Claim 추가.
+5. Access Token과 Refresh Token의 용도 혼용 차단.
+6. 응답에 토큰별 만료 시간 초 단위 제공.
+
+### 2. Refresh Token 저장
+
+1. `RefreshToken` Entity 및 Repository 추가.
+2. 사용자당 활성 Refresh Token 1개 유지.
+3. Refresh Token 원문 대신 SHA-256 해시 저장.
+4. 만료 일시와 생성·수정 일시 관리.
+5. 로그인 시 기존 Refresh Token을 새 값으로 교체.
+
+### 3. 토큰 재발급
+
+1. `POST /api/users/token/refresh` API 추가.
+2. JWT 서명, 만료, 토큰 유형, 사용자, 토큰 버전 검증.
+3. DB의 Refresh Token 해시와 요청 토큰 비교.
+4. 재발급 성공 시 Access Token과 Refresh Token 모두 새로 발급.
+5. 이전 Refresh Token 즉시 폐기하는 Rotation 적용.
+6. 재발급 조회에 비관적 락을 적용해 동시 재사용 차단.
+
+### 4. 로그아웃 및 토큰 무효화
+
+1. `POST /api/users/logout` API 추가.
+2. 로그아웃 시 저장된 Refresh Token 삭제.
+3. `users.token_version` 증가.
+4. JWT의 `tokenVersion`과 현재 사용자 버전 비교.
+5. 로그아웃 전에 발급된 Access Token 즉시 무효화.
+6. 로그아웃 전에 발급된 Refresh Token 재사용 차단.
+
+### 5. 비밀번호 변경 연동
+
+1. 비밀번호 변경 성공 시 `tokenVersion` 증가.
+2. 저장된 Refresh Token 삭제.
+3. 비밀번호 변경 전에 발급된 모든 토큰 즉시 무효화.
+4. 새 비밀번호 로그인 후 새 토큰 쌍 발급.
+
+### 6. Flyway V2
+
+1. H2 및 MySQL에 `V2__add_refresh_token.sql` 추가.
+2. `users.token_version` 컬럼 추가.
+3. `refresh_tokens` 테이블 추가.
+4. 사용자와 Refresh Token의 1:1 Unique 제약조건 추가.
+5. Refresh Token 해시 Unique 제약조건 추가.
+6. Entity와 H2·MySQL Schema의 `ddl-auto=validate` 유지.
+
+### 7. 환경 설정
+
+1. Access Token 만료 시간 환경변수 지원.
+2. Refresh Token 만료 시간 환경변수 지원.
+3. `.env.example`에 기본 만료 시간 추가.
+4. Docker Compose 애플리케이션 컨테이너에 만료 시간 전달.
+
+### 8. 자동화 테스트
+
+1. `JwtTokenLifecycleIntegrationTest` 추가.
+2. 토큰 쌍 발급과 Refresh Token 해시 저장 검증.
+3. 재발급 후 이전 Refresh Token 재사용 차단 검증.
+4. Access Token과 Refresh Token 용도 혼용 차단 검증.
+5. 로그아웃 후 기존 토큰 무효화 검증.
+6. 비밀번호 변경 후 기존 토큰 무효화 검증.
+7. OpenAPI 신규 경로 생성 검증.
+8. Testcontainers MySQL Flyway V2와 `refresh_tokens` 테이블 검증.
+
+### 9. 최종 검증 결과
+
+1. JWT 인증 수명주기 집중 테스트 5개 통과.
+2. 기존 회원 인증 및 회원 정보 테스트 12개 회귀 검증 통과.
+3. H2 Flyway V1·V2 적용 및 Schema 검증 성공.
+4. MySQL 8.4 Testcontainers Flyway V1·V2 적용 성공.
+5. 기존 Study CRUD 및 참여 신청 상태 전이 회귀 검증 성공.
+6. 전체 테스트 59개 통과.
+7. 실패, 오류, 건너뜀 0개.
+8. Maven `verify` 및 JAR 패키징 성공.

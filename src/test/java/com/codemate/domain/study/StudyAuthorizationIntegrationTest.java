@@ -1,6 +1,7 @@
 package com.codemate.domain.study;
 
 import com.codemate.domain.study.entity.Study;
+import com.codemate.domain.study.entity.StudyStatus;
 import com.codemate.domain.study.repository.StudyRepository;
 import com.codemate.domain.user.repository.UserRepository;
 import com.codemate.support.IntegrationTestSupport;
@@ -158,6 +159,87 @@ class StudyAuthorizationIntegrationTest extends IntegrationTestSupport {
         assertThat(studyRepository.existsById(studyId)).isFalse();
     }
 
+    @Test
+    void hostCanCloseRecruitmentManually() throws Exception {
+        String hostToken = signupAndLogin(
+                "study-close-host@example.com",
+                "study-close-host"
+        );
+        Long studyId = createStudy(hostToken, "수동 모집 마감 스터디", 4);
+
+        mockMvc.perform(patch("/api/studies/{studyId}/close", studyId)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("CLOSED"));
+
+        Study closedStudy = studyRepository.findById(studyId).orElseThrow();
+        assertThat(closedStudy.getStatus()).isEqualTo(StudyStatus.CLOSED);
+    }
+
+    @Test
+    void nonHostCannotCloseRecruitment() throws Exception {
+        String hostToken = signupAndLogin(
+                "study-close-owner@example.com",
+                "study-close-owner"
+        );
+        String otherUserToken = signupAndLogin(
+                "study-close-other@example.com",
+                "study-close-other"
+        );
+        Long studyId = createStudy(hostToken, "비방장 모집 마감 차단", 4);
+
+        mockMvc.perform(patch("/api/studies/{studyId}/close", studyId)
+                        .header("Authorization", "Bearer " + otherUserToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        Study unchangedStudy = studyRepository.findById(studyId).orElseThrow();
+        assertThat(unchangedStudy.getStatus()).isEqualTo(StudyStatus.RECRUITING);
+    }
+
+    @Test
+    void closedRecruitmentCannotBeClosedAgain() throws Exception {
+        String hostToken = signupAndLogin(
+                "study-close-repeat@example.com",
+                "study-close-repeat"
+        );
+        Long studyId = createStudy(hostToken, "중복 모집 마감 차단", 4);
+
+        mockMvc.perform(patch("/api/studies/{studyId}/close", studyId)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/api/studies/{studyId}/close", studyId)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("이미 모집이 마감된 스터디입니다."));
+    }
+
+    @Test
+    void userCannotApplyAfterHostClosesRecruitment() throws Exception {
+        String hostToken = signupAndLogin(
+                "study-close-apply-host@example.com",
+                "study-close-apply-host"
+        );
+        String applicantToken = signupAndLogin(
+                "study-close-applicant@example.com",
+                "study-close-applicant"
+        );
+        Long studyId = createStudy(hostToken, "마감 후 신청 차단", 4);
+
+        mockMvc.perform(patch("/api/studies/{studyId}/close", studyId)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/studies/{studyId}/members", studyId)
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("모집 중인 스터디에만 참여 신청할 수 있습니다."));
+    }
+
     private String createRequest(String title) {
         return createStudyRequest(title, 4);
     }
@@ -171,7 +253,6 @@ class StudyAuthorizationIntegrationTest extends IntegrationTestSupport {
                   "meetingType": "OFFLINE",
                   "location": "서울 강남",
                   "maxMemberCount": 5,
-                  "status": "RECRUITING",
                   "techStackNames": ["Java", "Spring Security"]
                 }
                 """.formatted(title);

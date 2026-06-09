@@ -1,6 +1,7 @@
 package com.codemate.global.security;
 
 import com.codemate.global.exception.ErrorCode;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,8 +36,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
-                jwtTokenProvider.validateToken(token);
-                UserDetails userDetails = customUserDetailsService.loadUserByUsername(jwtTokenProvider.getEmail(token));
+                Claims claims = jwtTokenProvider.parseAccessToken(token);
+                UserDetails userDetails = customUserDetailsService.loadUserByUsername(jwtTokenProvider.getEmail(claims));
+                CustomUserDetails customUserDetails = (CustomUserDetails) userDetails;
+                if (customUserDetails.getTokenVersion() != jwtTokenProvider.getTokenVersion(claims)) {
+                    throw new IllegalArgumentException("Invalid token version");
+                }
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,

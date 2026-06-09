@@ -444,7 +444,6 @@ Content-Type: application/json
   "meetingType": "OFFLINE",
   "location": "강남",
   "maxMemberCount": 5,
-  "status": "RECRUITING",
   "techStackNames": ["Java", "Spring Security"]
 }
 ```
@@ -453,8 +452,30 @@ Content-Type: application/json
 
 - 로그인 필요.
 - 스터디 방장만 수정 가능.
+- 모집 상태는 일반 수정 API에서 변경하지 않는다.
 - `techStackNames`를 보내면 기존 기술 스택 연결이 요청값 기준으로 교체된다.
 - 다른 사용자의 토큰으로 요청하면 403 응답이 발생한다.
+
+### 10.5 스터디 모집 수동 마감
+
+방장 토큰을 사용해 아래 요청을 실행한다.
+
+```http
+PATCH {{baseUrl}}/api/studies/{{studyId}}/close
+Authorization: Bearer {{accessToken}}
+```
+
+요청 Body는 사용하지 않는다.
+
+성공 시 확인할 값:
+
+- HTTP 상태 코드 `200`.
+- 응답의 `data.status`가 `CLOSED`.
+- 마감 이후 다른 사용자가 참여 신청하면 HTTP `400`.
+- 이미 마감된 스터디를 다시 마감하면 HTTP `409`.
+- 방장이 아닌 사용자가 요청하면 HTTP `403`.
+
+모집 마감 시간에 따른 자동 마감 기능은 아직 포함하지 않으며, 현재는 정원 도달 또는 방장의 수동 요청으로 모집을 마감한다.
 
 ---
 
@@ -1391,6 +1412,61 @@ docker compose up -d
 docker compose down -v
 ```
 
+---
+
+## 30. Testcontainers 기반 MySQL 통합 테스트
+
+### 30.1 목적
+
+H2 테스트만으로 확인하기 어려운 MySQL 문법, 자료형, 제약조건과 Flyway MySQL 마이그레이션을 실제 MySQL 8.4 환경에서 자동 검증한다.
+
+### 30.2 사전 조건
+
+1. Docker Desktop 실행.
+2. Docker Engine이 정상 상태인지 확인.
+
+```powershell
+docker info
+```
+
+별도의 MySQL 계정, 데이터베이스 또는 `.env` 설정은 필요하지 않다. Testcontainers가 임시 MySQL 컨테이너와 임의 포트를 자동으로 준비하고 테스트 종료 후 제거한다.
+
+### 30.3 MySQL 통합 테스트만 실행
+
+```powershell
+.\mvnw.cmd "-Dtest=MySqlTestcontainersIntegrationTest" test
+```
+
+검증 항목:
+
+1. MySQL 8.4 컨테이너 실행.
+2. Spring Boot `@ServiceConnection`을 통한 DataSource 자동 연결.
+3. `db/migration/mysql/V1__create_initial_schema.sql` 적용.
+4. Flyway Schema 버전 `1` 확인.
+5. 실제 DB 종류가 MySQL인지 확인.
+6. `study_members` 테이블 생성 확인.
+7. 회원가입 및 로그인.
+8. 스터디 생성.
+9. 방장의 수동 모집 마감.
+10. 마감된 스터디 상세 조회.
+
+### 30.4 전체 테스트 실행
+
+```powershell
+.\mvnw.cmd verify
+```
+
+Docker Desktop이 실행 중이면 H2 기반 테스트와 MySQL Testcontainers 테스트를 모두 실행한다. Docker를 사용할 수 없는 로컬 환경에서는 MySQL 통합 테스트만 건너뛴다.
+
+### 30.5 GitHub Actions
+
+1. GitHub Hosted Runner의 Docker 상태 확인.
+2. Maven 테스트 단계에서 임시 MySQL 8.4 컨테이너 실행.
+3. MySQL 통합 테스트를 포함한 전체 테스트와 패키징 수행.
+4. 성공 후 Docker 애플리케이션 이미지 빌드 수행.
+
+CI에서는 `docker info` 단계가 실패하면 Maven 테스트를 시작하지 않으므로 MySQL 통합 테스트가 의도치 않게 생략되지 않는다.
+
 회원, 스터디, 참여 신청 데이터가 모두 삭제되므로 초기화가 필요한 경우에만 사용한다.
 
 ### 24.8 포트 충돌 해결
@@ -1988,3 +2064,195 @@ docker build -t codemate:local-check .
 2. `.env` 및 운영 Secret을 워크플로에 직접 작성하지 않음.
 3. H2 인메모리 DB를 사용하므로 DB 비밀번호 Secret이 필요하지 않음.
 4. Docker 이미지는 빌드만 하며 외부 Registry에 Push하지 않음.
+
+## 31. 회원 정보 수정 및 비밀번호 변경
+
+### 31.1 사전 준비
+
+1. 회원가입과 로그인을 진행한다.
+2. 로그인 응답의 `data.accessToken`을 복사한다.
+3. Swagger UI의 `Authorize`에 access token 값만 입력한다.
+4. Postman에서는 `Authorization: Bearer {accessToken}` Header를 추가한다.
+
+### 31.2 회원 정보 수정
+
+```http
+PATCH /api/users/me
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+요청 예시:
+
+```json
+{
+  "nickname": "코드메이트2",
+  "mainTechStack": "Java, Spring Boot"
+}
+```
+
+확인 항목:
+
+1. 성공 시 HTTP `200`.
+2. 응답의 `nickname`, `mainTechStack`이 변경된 값인지 확인.
+3. 다른 회원이 사용 중인 닉네임은 HTTP `409`.
+4. 기존 닉네임을 그대로 사용하면서 기술 스택만 변경하는 요청은 허용.
+5. 이메일은 로그인 식별자이므로 이번 수정 API에서 변경하지 않음.
+
+### 31.3 비밀번호 변경
+
+```http
+PATCH /api/users/me/password
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+요청 예시:
+
+```json
+{
+  "currentPassword": "strongPassword1!",
+  "newPassword": "newStrongPassword2!"
+}
+```
+
+확인 항목:
+
+1. 성공 시 HTTP `200`.
+2. 현재 비밀번호가 틀리면 HTTP `400`.
+3. 새 비밀번호가 현재 비밀번호와 같으면 HTTP `400`.
+4. 새 비밀번호는 8자 이상 30자 이하.
+5. 변경 후 기존 비밀번호 로그인은 HTTP `401`.
+6. 변경한 새 비밀번호 로그인은 HTTP `200`과 새 access token 반환.
+7. DB에는 새 비밀번호 원문이 아닌 BCrypt 해시가 저장됨.
+
+### 31.4 자동화 테스트
+
+회원 기능 보강 테스트만 실행:
+
+```powershell
+.\mvnw.cmd "-Dtest=UserProfileIntegrationTest" test
+```
+
+전체 테스트 실행:
+
+```powershell
+.\mvnw.cmd verify
+```
+
+`UserProfileIntegrationTest` 확인 범위:
+
+1. 닉네임과 주요 기술 스택 수정.
+2. 현재 닉네임 유지.
+3. 다른 회원의 닉네임 사용 차단.
+4. 인증 및 요청값 검증.
+5. 현재 비밀번호 불일치와 동일 비밀번호 변경 차단.
+6. BCrypt 재암호화와 새 비밀번호 로그인.
+
+### 31.5 현재 토큰 정책
+
+1. 비밀번호 변경 시 기존 access token과 refresh token이 모두 무효화된다.
+2. 변경 직후 새 비밀번호로 다시 로그인하여 새 토큰 쌍을 발급받아야 한다.
+
+## 32. JWT 재발급 및 로그아웃
+
+### 32.1 토큰 구성
+
+1. Access Token
+   - 인증이 필요한 API의 `Authorization` Header에 사용.
+   - 기본 유효 시간 1시간.
+   - JWT `tokenType` 값은 `ACCESS`.
+2. Refresh Token
+   - Access Token 재발급에만 사용.
+   - 기본 유효 시간 14일.
+   - JWT `tokenType` 값은 `REFRESH`.
+3. Access Token과 Refresh Token은 서로의 용도로 사용할 수 없음.
+4. 로그인 응답의 `accessTokenExpiresIn`, `refreshTokenExpiresIn`은 초 단위.
+
+### 32.2 로그인 응답 확인
+
+```json
+{
+  "success": true,
+  "message": "로그인이 완료되었습니다.",
+  "data": {
+    "tokenType": "Bearer",
+    "accessToken": "Access Token",
+    "refreshToken": "Refresh Token",
+    "accessTokenExpiresIn": 3600,
+    "refreshTokenExpiresIn": 1209600
+  }
+}
+```
+
+Refresh Token은 인증 Header에 넣지 않고 재발급 요청 Body에만 사용한다.
+
+### 32.3 토큰 재발급
+
+```http
+POST /api/users/token/refresh
+Content-Type: application/json
+```
+
+```json
+{
+  "refreshToken": "로그인에서 받은 Refresh Token"
+}
+```
+
+확인 항목:
+
+1. 성공 시 HTTP `200`과 새 Access Token·Refresh Token 반환.
+2. 재발급이 성공하면 요청에 사용한 이전 Refresh Token은 즉시 폐기.
+3. 이전 Refresh Token 재사용 시 HTTP `401`.
+4. Access Token을 재발급 API에 전달하면 HTTP `401`.
+5. 만료되거나 변조된 Refresh Token은 HTTP `401`.
+6. 재발급 조회에는 비관적 락을 적용해 동일 Refresh Token의 동시 사용을 차단.
+
+### 32.4 로그아웃
+
+```http
+POST /api/users/logout
+Authorization: Bearer {accessToken}
+```
+
+확인 항목:
+
+1. 성공 시 HTTP `200`.
+2. DB에 저장된 사용자의 Refresh Token 삭제.
+3. 사용자 `tokenVersion` 증가.
+4. 로그아웃 전에 발급된 Access Token은 이후 요청에서 HTTP `401`.
+5. 로그아웃 전에 발급된 Refresh Token도 재발급 요청에서 HTTP `401`.
+
+### 32.5 Refresh Token 저장 정책
+
+1. Refresh Token 원문은 DB에 저장하지 않음.
+2. SHA-256 해시만 `refresh_tokens.token_hash`에 저장.
+3. 사용자당 활성 Refresh Token은 1개.
+4. 다시 로그인하거나 재발급하면 저장된 Refresh Token이 새 값으로 교체됨.
+5. 탈취된 DB만으로 Refresh Token 원문을 바로 사용할 수 없도록 구성.
+
+### 32.6 토큰 만료 시간 환경변수
+
+```text
+CODEMATE_JWT_ACCESS_TOKEN_VALIDITY_MILLISECONDS=3600000
+CODEMATE_JWT_REFRESH_TOKEN_VALIDITY_MILLISECONDS=1209600000
+```
+
+운영 환경에서는 서비스 정책에 따라 값을 조정할 수 있다.
+
+### 32.7 자동화 테스트
+
+```powershell
+.\mvnw.cmd "-Dtest=JwtTokenLifecycleIntegrationTest" test
+```
+
+확인 범위:
+
+1. 로그인 토큰 쌍과 만료 시간 반환.
+2. Refresh Token 원문 미저장.
+3. 토큰 재발급과 Refresh Token 회전.
+4. 이전 Refresh Token 재사용 차단.
+5. Access Token과 Refresh Token 용도 혼용 차단.
+6. 로그아웃 후 기존 토큰 무효화.
+7. 비밀번호 변경 후 기존 토큰 무효화.
