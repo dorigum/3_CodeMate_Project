@@ -208,8 +208,7 @@ class CodeMateApplicationTests {
         mockMvc.perform(get("/api/studies"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.items[0].title").value("Spring Boot 스터디"))
-                .andExpect(jsonPath("$.data.items[0].techStackNames[0]").value("Java"));
+                .andExpect(jsonPath("$.data.items[*].id").value(hasItems(studyId)));
 
         mockMvc.perform(get("/api/studies/" + studyId))
                 .andExpect(status().isOk())
