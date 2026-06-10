@@ -32,7 +32,7 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: mysql  # prod에서 mysql로 변경
       CODEMATE_DB_HOST: mysql
       CODEMATE_DB_PORT: 3306
       CODEMATE_DB_NAME: ${CODEMATE_DB_NAME:-codemate}
