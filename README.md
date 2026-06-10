@@ -1,320 +1,59 @@
-# 🦄CodeMate
+# 🦄 CodeMate
 
 [![CI](https://github.com/dorigum/3_CodeMate_Project/actions/workflows/ci.yml/badge.svg)](https://github.com/dorigum/3_CodeMate_Project/actions/workflows/ci.yml)
 
-개발자를 위한 스터디(프로젝트 형태) 및 모각코(모여서 각자 코딩, 원데이 스터디) 모집·참여 관리 백엔드 API 프로젝트입니다.
+**개발자를 위한 스터디(장기) 및 모각코(단기 번개) 모집·참여 관리 백엔드 API 서버입니다.** 단순한 게시판 CRUD를 넘어 **"상태 중심의 비즈니스 로직(대기/승인/거절)"** 과 **"동시성 제어를 통한 안정적인 정원 관리"** 를 핵심 목표로 두고 설계 및 개발되었습니다.
 
-단순한 모집 게시판을 넘어 회원 인증, 참여 신청, 방장 승인·거절, 모집 인원 관리 등 실제 스터디 운영 과정에서 필요한 비즈니스 흐름을 구현합니다.
+---
 
-## 주요 기능
+## 🚀 1. 운영 및 배포 정보
+- **운영 도메인:** `https://polar-bear.o-r.kr`
+- **Health Check:** `https://polar-bear.o-r.kr/actuator/health` (ALB Target Group: `Healthy`)
+- **CI/CD 인프라:** GitHub Actions ➡️ Docker Hub ➡️ AWS EC2 (Docker Compose) ➡️ ALB / ACM (HTTPS)
+- **상세 배포 문서:** [AWS 배포 가이드](3_documents/info/AWS_DEPLOYMENT.md) | [시스템 아키텍처](3_documents/info/ARCHITECTURE.md)
 
-- Spring Security와 JWT 기반 회원가입·로그인
-- Access Token·Refresh Token 분리와 토큰 재발급
-- Refresh Token 회전 및 해시 저장
-- 로그아웃·비밀번호 변경 시 기존 JWT 즉시 무효화
-- 로그인 사용자 정보 조회
-- 로그인 사용자 닉네임·주요 기술 스택 수정
-- 현재 비밀번호 확인 기반 비밀번호 변경
-- 스터디 및 모각코 모집 글 CRUD
-- 키워드·카테고리·모집 상태·진행 방식·지역·기술 스택 기반 검색과 페이징
-- 기술 스택 등록 및 스터디 연결
-- 스터디 참여 신청과 중복 신청 방지
-- 승인 대기 중인 참여 신청 취소
-- 승인된 스터디 참여 탈퇴와 현재 인원 감소
-- 방장의 참여 신청 목록 조회
-- 참여 신청 승인·거절
-- 승인 시 현재 인원 증가
-- 정원 도달 시 모집 상태 자동 마감
-- 자동 정원 마감 후 탈퇴 발생 시 모집 자동 재개
-- 방장의 스터디 모집 수동 마감
-- 동시 승인 시 비관적 락을 통한 모집 정원 초과 방지
-- 인증·인가 및 비즈니스 예외 응답 형식 통일
-- 필드 설명, JSON 예시, 공통 오류 Schema가 포함된 Swagger/OpenAPI 문서화
-- Flyway 기반 H2/MySQL 스키마 버전 관리
+---
 
-## 기술 스택
+## 🛠 2. 핵심 기술 스택 및 구조
+- **Backend:** Java 17, Spring Boot 4.0.6, Spring Security, Spring Data JPA, Flyway
+- **Database:** MySQL 8.4 (운영/통합 테스트), H2 (로컬 개발)
+- **DevOps & Test:** Docker, Docker Compose, GitHub Actions, Testcontainers
 
-| 구분 | 기술 |
-|---|---|
-| Language | Java 17 |
-| Framework | Spring Boot 4.0.6 |
-| Web | Spring Web MVC |
-| Persistence | Spring Data JPA, Hibernate, Flyway |
-| Security | Spring Security, JWT |
-| Database | H2, MySQL 8.4 |
-| Build | Maven, Maven Wrapper |
-| Test | JUnit 5, MockMvc, Spring Security Test, Testcontainers |
-| API Docs | springdoc-openapi, Swagger UI |
-| DevOps | Docker, Docker Compose, GitHub Actions, Docker Hub, AWS EC2, ALB, ACM |
+---
 
-## 주요 도메인
+## ✨ 3. 핵심 비즈니스 포인트
 
-- `User`: 회원 정보와 권한
-- `Study`: 스터디·모각코 모집 글과 모집 상태
-- `StudyMember`: 참여 신청과 승인 상태
-- `TechStack`: 기술 스택 정보
-- `StudyTechStack`: 스터디와 기술 스택의 연결
+### ① 정원 관리 및 동시성 제어 (Concurrency Control)
+- 사용자의 스터디 참여 신청 및 방장의 승인/거절 시스템 구현.
+- **비관적 락(`SELECT ... FOR UPDATE`)**을 적용하여 정원 마감 직전 동시 요청이 발생하더라도 데이터 정합성을 보장하며 정원을 정확히 카운트함.
+- 정원 도달 시 `CLOSED` 상태 자동 전환 및 참여자 탈퇴 시 `RECRUITING` 상태 자동 복원 로직 자가 치유(Self-healing) 구조 설계.
 
-## 실행 방법
+### ② 보안 및 JWT 운영 고도화
+- **Refresh Token 회전(RTR, Refresh Token Rotation)** 방식을 도입하고 SHA-256 해시 형태로 DB 동기화하여 토큰 탈취 위험 최소화.
+- 로그아웃 및 비밀번호 변경 시 기존 발급된 JWT를 즉시 무효화하는 Blacklist 메커니즘 구현.
 
-### 요구 사항
+### ③ 다조건 동적 검색 및 페이징
+- 키워드, 카테고리(STUDY/MOGAKCO), 모집 상태, 진행 방식, 지역, 기술 스택 등 총 6가지 조건을 자유롭게 조합하여 조회할 수 있는 최적화된 동적 쿼리 및 페이징 구현.
+- 무분별한 조회를 방지하기 위해 JPA 지연 로딩(Lazy Loading) 및 성능 최적화 적용.
 
-- Java 17 이상
+---
 
-### 서버 실행
+## 🧪 4. 테스트 및 품질 관리
+- **도메인 단위 테스트:** 핵심 도메인 비즈니스 로직에 대한 철저한 단위 테스트 격리 수행.
+- **MySQL 통합 테스트:** H2 데이터베이스와의 환경 격차를 줄이기 위해 **Testcontainers**를 도입, 실제 운영 환경과 동일한 MySQL 8.4 환경에서 컨테이너 기반 API 통합 테스트 자동화 수행.
 
-별도 프로필을 지정하지 않으면 기본 `h2` 프로필로 실행됩니다.
+---
 
-```powershell
-git clone https://github.com/dorigum/3_CodeMate.git
-cd 3_CodeMate
-.\mvnw.cmd spring-boot:run
-```
+## 📂 5. 프로젝트 상세 문서 (상세 내용 확인)
 
-서버는 기본적으로 `http://localhost:8080`에서 실행됩니다.
+CodeMate 프로젝트는 모든 설계 및 트러블슈팅 과정을 도큐멘테이션하여 관리하고 있습니다. 아래 링크에서 상세 내용을 확인하실 수 있습니다.
 
-### 테스트 실행
-
-```powershell
-.\mvnw.cmd test
-```
-
-Docker Desktop이 실행 중이면 Testcontainers가 임시 MySQL 8.4 컨테이너를 생성해 MySQL 전용 Flyway 마이그레이션과 핵심 API 흐름도 함께 검증합니다. Docker를 사용할 수 없는 로컬 환경에서는 MySQL 통합 테스트만 건너뛰고 나머지 테스트를 실행합니다.
-
-MySQL 통합 테스트만 실행:
-
-```powershell
-.\mvnw.cmd "-Dtest=MySqlTestcontainersIntegrationTest" test
-```
-
-### JWT Secret 설정
-
-로컬에서는 기본 개발용 키로 실행할 수 있습니다. 별도 키를 사용하려면 서버 실행 전에 환경 변수를 설정합니다.
-
-```powershell
-$env:CODEMATE_JWT_SECRET="Base64로 인코딩된 JWT Secret"
-.\mvnw.cmd spring-boot:run
-```
-
-## H2 Console
-
-- URL: `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:codemate`
-- User Name: `sa`
-- Password: 비워두기
-
-H2는 인메모리 데이터베이스이므로 서버를 종료하면 저장된 데이터가 초기화됩니다.
-
-## MySQL 실행
-
-먼저 MySQL에 데이터베이스와 사용자를 준비합니다.
-
-```sql
-CREATE DATABASE codemate
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
-
-CREATE USER 'codemate'@'%' IDENTIFIED BY '비밀번호';
-GRANT ALL PRIVILEGES ON codemate.* TO 'codemate'@'%';
-FLUSH PRIVILEGES;
-```
-
-PowerShell에서 접속 정보를 환경변수로 설정하고 `mysql` 프로필을 활성화합니다.
-
-```powershell
-$env:CODEMATE_DB_HOST="localhost"
-$env:CODEMATE_DB_PORT="3306"
-$env:CODEMATE_DB_NAME="codemate"
-$env:CODEMATE_DB_USERNAME="codemate"
-$env:CODEMATE_DB_PASSWORD="비밀번호"
-
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
-```
-
-기본값:
-
-- Host: `localhost`
-- Port: `3306`
-- Database: `codemate`
-- Username: `codemate`
-- Password: 기본값 없음, `CODEMATE_DB_PASSWORD` 필수
-
-MySQL 프로필에서는 H2 Console이 비활성화됩니다.
-
-## 운영 프로필
-
-`prod` 프로필은 운영 배포를 위한 독립 MySQL 설정입니다.
-
-```powershell
-$env:CODEMATE_DB_HOST="운영 DB 주소"
-$env:CODEMATE_DB_PORT="3306"
-$env:CODEMATE_DB_NAME="codemate"
-$env:CODEMATE_DB_USERNAME="운영 DB 계정"
-$env:CODEMATE_DB_PASSWORD="운영 DB 비밀번호"
-$env:CODEMATE_DB_USE_SSL="true"
-$env:CODEMATE_JWT_SECRET="충분히 긴 Base64 JWT Secret"
-
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=prod"
-```
-
-운영 프로필의 기본 보안 설정:
-
-- Swagger UI와 OpenAPI JSON 비활성화
-- H2 Console 비활성화
-- Hibernate SQL 출력 비활성화
-- 오류 상세 메시지와 Stack Trace 비노출
-- Flyway 자동 baseline 비활성화
-- DB 접속 정보와 JWT Secret 환경변수 필수
-- MySQL SSL 기본 활성화
-
-실제 운영 DB는 배포 전에 Flyway 이력이 준비되어 있어야 합니다.
-
-## DB 마이그레이션
-
-Flyway가 애플리케이션 시작 시 DB 스키마 버전을 확인하고 필요한 SQL을 순서대로 적용합니다.
-
-- H2: `src/main/resources/db/migration/h2`
-- MySQL: `src/main/resources/db/migration/mysql`
-- 현재 버전: `V1__create_initial_schema.sql`
-- Hibernate: `ddl-auto=validate`
-
-이미 적용된 마이그레이션 파일은 수정하지 않고, 스키마 변경 시 H2와 MySQL 경로에 동일한 버전의 새 파일을 추가합니다.
-
-```text
-V2__add_user_profile_image.sql
-V3__create_study_bookmarks.sql
-```
-
-## Docker Compose 실행
-
-Docker Desktop을 실행한 후 환경변수 파일을 준비합니다.
-
-```powershell
-Copy-Item .env.example .env
-```
-
-`.env`의 DB 비밀번호, MySQL root 비밀번호, JWT Secret을 실제 개발용 값으로 변경한 뒤 실행합니다.
-
-개발용 Docker 실행은 `.env`의 `SPRING_PROFILES_ACTIVE=mysql`을 사용합니다. 운영 설정을 점검할 때는 `prod`로 변경하며, 이 경우 Swagger가 열리지 않는 것이 정상입니다.
-
-```powershell
-docker compose up --build -d
-docker compose ps
-```
-
-기본 접속 주소:
-
-- 애플리케이션: `http://localhost:8080`
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- MySQL 외부 포트: `3307`
-- Health Check: `http://localhost:8080/actuator/health`
-
-로그와 종료:
-
-```powershell
-docker compose logs -f app
-docker compose down
-```
-
-MySQL 데이터까지 초기화하려면 다음 명령을 사용합니다.
-
-```powershell
-docker compose down -v
-```
-
-## Swagger/OpenAPI
-
-서버 실행 후 아래 주소에서 API 명세를 확인하고 직접 요청할 수 있습니다.
-
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
-
-JWT 인증이 필요한 API 테스트 순서:
-
-1. `POST /api/users/signup`으로 회원가입
-2. `POST /api/users/login`으로 access token과 refresh token 발급
-3. 응답의 `data.accessToken` 복사
-4. Swagger UI 상단 `Authorize` 클릭
-5. 토큰 값만 입력하고 인증
-6. 자물쇠 표시가 있는 API 실행
-
-`Bearer ` 접두사는 Swagger UI가 자동으로 추가하므로 access token 값만 입력합니다.
-
-## AWS 운영 배포
-
-- 운영 도메인: `https://polar-bear.o-r.kr`
-- Health Check: `https://polar-bear.o-r.kr/actuator/health`
-- 배포 구성: GitHub Actions → Docker Hub → EC2 Docker Compose
-- 외부 통신: ACM 인증서가 적용된 ALB HTTPS `443`
-- 애플리케이션 연결: ALB Target Group → EC2 `8080`
-- 데이터베이스: EC2 Docker 내부 MySQL 8.4와 named volume
-
-운영 `prod` 프로필에서는 Swagger UI가 비활성화됩니다. Postman에서 `https://polar-bear.o-r.kr/api`를 Base URL로 사용해 운영 API를 확인합니다.
-
-## 대표 API
-
-| Method | Endpoint | 설명 | 인증 |
-|---|---|---|---|
-| `POST` | `/api/users/signup` | 회원가입 | 불필요 |
-| `POST` | `/api/users/login` | 로그인 및 JWT 발급 | 불필요 |
-| `POST` | `/api/users/token/refresh` | JWT 토큰 쌍 재발급 | 불필요 |
-| `POST` | `/api/users/logout` | 로그아웃 및 기존 토큰 무효화 | 필요 |
-| `GET` | `/api/users/me` | 내 정보 조회 | 필요 |
-| `PATCH` | `/api/users/me` | 닉네임 및 주요 기술 스택 수정 | 필요 |
-| `PATCH` | `/api/users/me/password` | 비밀번호 변경 | 필요 |
-| `GET` | `/api/users/me/study-applications` | 내 참여 신청 및 처리 상태 조회 | 필요 |
-| `POST` | `/api/studies` | 모집 글 생성 | 필요 |
-| `GET` | `/api/studies` | 모집 글 목록 조회 | 불필요 |
-| `GET` | `/api/studies/{studyId}` | 모집 글 상세 조회 | 불필요 |
-| `PATCH` | `/api/studies/{studyId}` | 모집 글 수정 | 방장 |
-| `PATCH` | `/api/studies/{studyId}/close` | 스터디 모집 수동 마감 | 방장 |
-| `DELETE` | `/api/studies/{studyId}` | 모집 글 삭제 | 방장 |
-| `POST` | `/api/studies/{studyId}/members` | 참여 신청 | 필요 |
-| `DELETE` | `/api/studies/{studyId}/members/me/application` | 승인 대기 신청 취소 | 신청자 |
-| `DELETE` | `/api/studies/{studyId}/members/me/membership` | 승인된 스터디 참여 탈퇴 | 참여자 |
-| `GET` | `/api/studies/{studyId}/members` | 참여 신청 목록 조회 | 방장 |
-| `PATCH` | `/api/studies/{studyId}/members/{memberId}/approve` | 참여 승인 | 방장 |
-| `PATCH` | `/api/studies/{studyId}/members/{memberId}/reject` | 참여 거절 | 방장 |
-
-인증이 필요한 요청에는 다음 Header를 사용합니다.
-
-```text
-Authorization: Bearer {accessToken}
-```
-
-스터디 목록은 검색 조건을 자유롭게 조합할 수 있습니다.
-
-```http
-GET /api/studies?keyword=백엔드&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
-```
-
-지원 조건:
-
-- `keyword`: 제목 또는 내용 부분 검색
-- `category`: `STUDY`, `MOGAKKO`
-- `status`: `RECRUITING`, `CLOSED`, `IN_PROGRESS`, `FINISHED`
-- `meetingType`: `ONLINE`, `OFFLINE`
-- `location`: 지역 부분 검색
-- `techStack`: 기술 스택 이름 부분 검색
-
-## 문서
-
-- [프로젝트 개요](3_documents/info/PROJECT_OVERVIEW.md)
-- [프로젝트 명세](3_documents/info/PROJECT_SPECIFICATION.md)
-- [시스템 아키텍처](3_documents/info/ARCHITECTURE.md)
-- [데이터베이스 설계](3_documents/info/DATABASE_DESIGN.md)
-- [프로젝트 개발 기록](3_documents/PROJECT_LOG.md)
-- [트러블슈팅](3_documents/TROUBLESHOOTING.md)
-- [CodeMate 실행 가이드](3_documents/guides/CodeMate_실행_가이드.md)
-- [프로젝트 회고](3_documents/info/RETROSPECTIVE.md)
-- [AWS 배포 구성과 검증](3_documents/info/AWS_DEPLOYMENT.md)
-- [백엔드 프로젝트 기획](3_documents/plan/Backend_Project_기획.md)
-
-## 향후 계획
-
-- CloudWatch 기반 로그·지표 모니터링
-- 배포 실패 자동 Rollback과 운영 Smoke Test
-- Terraform 기반 AWS 인프라 코드화
+- 📝 [PROJECT OVERVIEW (초기 목표 및 MVP)](3_documents/info/PROJECT_OVERVIEW.md)
+- 📋 [PROJECT SPECIFICATION (요구사항 및 API 규칙)](3_documents/info/PROJECT_SPECIFICATION.md)
+- 📐 [DATABASE DESIGN (ERD 및 테이블 정의)](3_documents/info/DATABASE_DESIGN.md)
+- 🏗 [SYSTEM ARCHITECTURE (시스템 흐름도 및 시퀀스 다이어그램)](3_documents/info/ARCHITECTURE.md)
+- 🚨 [TROUBLESHOOTING (인프라 및 비즈니스 에러 해결 색인)](3_documents/TROUBLESHOOTING.md)
+- 🎯 [RETROSPECTIVE (6일간의 개발 회고 및 개선 방향)](3_documents/info/RETROSPECTIVE.md)
 
 ---
 *Updated at_2026.06.10*
