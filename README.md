@@ -19,10 +19,13 @@
 - 키워드·카테고리·모집 상태·진행 방식·지역·기술 스택 기반 검색과 페이징
 - 기술 스택 등록 및 스터디 연결
 - 스터디 참여 신청과 중복 신청 방지
+- 승인 대기 중인 참여 신청 취소
+- 승인된 스터디 참여 탈퇴와 현재 인원 감소
 - 방장의 참여 신청 목록 조회
 - 참여 신청 승인·거절
 - 승인 시 현재 인원 증가
 - 정원 도달 시 모집 상태 자동 마감
+- 자동 정원 마감 후 탈퇴 발생 시 모집 자동 재개
 - 방장의 스터디 모집 수동 마감
 - 동시 승인 시 비관적 락을 통한 모집 정원 초과 방지
 - 인증·인가 및 비즈니스 예외 응답 형식 통일
@@ -255,6 +258,8 @@ JWT 인증이 필요한 API 테스트 순서:
 | `PATCH` | `/api/studies/{studyId}/close` | 스터디 모집 수동 마감 | 방장 |
 | `DELETE` | `/api/studies/{studyId}` | 모집 글 삭제 | 방장 |
 | `POST` | `/api/studies/{studyId}/members` | 참여 신청 | 필요 |
+| `DELETE` | `/api/studies/{studyId}/members/me/application` | 승인 대기 신청 취소 | 신청자 |
+| `DELETE` | `/api/studies/{studyId}/members/me/membership` | 승인된 스터디 참여 탈퇴 | 참여자 |
 | `GET` | `/api/studies/{studyId}/members` | 참여 신청 목록 조회 | 방장 |
 | `PATCH` | `/api/studies/{studyId}/members/{memberId}/approve` | 참여 승인 | 방장 |
 | `PATCH` | `/api/studies/{studyId}/members/{memberId}/reject` | 참여 거절 | 방장 |
@@ -282,13 +287,20 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 
 ## 문서
 
+- [프로젝트 개요](3_documents/PROJECT_OVERVIEW.md)
+- [프로젝트 명세](3_documents/PROJECT_SPECIFICATION.md)
+- [시스템 아키텍처](3_documents/ARCHITECTURE.md)
+- [데이터베이스 설계](3_documents/DATABASE_DESIGN.md)
 - [프로젝트 개발 기록](3_documents/PROJECT_LOG.md)
+- [트러블슈팅](3_documents/TROUBLESHOOTING.md)
 - [CodeMate 실행 가이드](3_documents/CodeMate_실행_가이드.md)
+- [프로젝트 회고](3_documents/RETROSPECTIVE.md)
 - [백엔드 프로젝트 기획](3_documents/Backend_Project_기획.md)
 
 ## 향후 계획
 
-- 회원 탈퇴와 스터디 운영 상태 전환
+- AWS 배포 환경 구성
+- 배포 환경 모니터링 및 운영 점검
 
 ---
-*Updated at_2026.06.09*
+*Updated at_2026.06.10*

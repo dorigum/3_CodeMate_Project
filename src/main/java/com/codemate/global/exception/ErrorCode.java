@@ -30,6 +30,8 @@ public enum ErrorCode {
     STUDY_CAPACITY_FULL(HttpStatus.BAD_REQUEST, "모집 인원이 마감되었습니다."),
     STUDY_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "참여 신청 내역을 찾을 수 없습니다."),
     INVALID_STUDY_MEMBER_STATUS(HttpStatus.BAD_REQUEST, "대기 중인 신청만 처리할 수 있습니다."),
+    STUDY_APPLICATION_NOT_PENDING(HttpStatus.BAD_REQUEST, "대기 중인 참여 신청만 취소할 수 있습니다."),
+    STUDY_MEMBERSHIP_NOT_APPROVED(HttpStatus.BAD_REQUEST, "승인된 스터디 참여만 탈퇴할 수 있습니다."),
     DATA_INTEGRITY_VIOLATION(HttpStatus.CONFLICT, "데이터 제약조건을 위반했습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
 

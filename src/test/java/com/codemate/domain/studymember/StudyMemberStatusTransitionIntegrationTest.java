@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -162,6 +163,100 @@ class StudyMemberStatusTransitionIntegrationTest extends IntegrationTestSupport 
         expectMyApplicationStatus(users.applicantToken(), studyId, "PENDING");
     }
 
+    @Test
+    void pendingApplicantCanCancelAndApplyAgain() throws Exception {
+        TestUsers users = createUsers("transition-cancel");
+        Long studyId = createStudy(users.hostToken(), "신청 취소 후 재신청", 4);
+        Long cancelledMemberId = apply(studyId, users.applicantToken());
+
+        mockMvc.perform(delete("/api/studies/{studyId}/members/me/application", studyId)
+                        .header("Authorization", "Bearer " + users.applicantToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("스터디 참여 신청을 취소했습니다."));
+
+        assertThat(studyMemberRepository.findById(cancelledMemberId)).isEmpty();
+
+        Long reappliedMemberId = apply(studyId, users.applicantToken());
+        assertThat(reappliedMemberId).isNotEqualTo(cancelledMemberId);
+    }
+
+    @Test
+    void approvedMemberCanWithdrawAndMemberCountDecreases() throws Exception {
+        TestUsers users = createUsers("transition-withdraw");
+        Long studyId = createStudy(users.hostToken(), "승인 후 탈퇴", 4);
+        Long memberId = apply(studyId, users.applicantToken());
+        approve(studyId, memberId, users.hostToken());
+
+        mockMvc.perform(delete("/api/studies/{studyId}/members/me/membership", studyId)
+                        .header("Authorization", "Bearer " + users.applicantToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("스터디 참여를 탈퇴했습니다."));
+
+        Study study = studyRepository.findById(studyId).orElseThrow();
+        assertThat(study.getCurrentMemberCount()).isEqualTo(1);
+        assertThat(studyMemberRepository.findById(memberId)).isEmpty();
+    }
+
+    @Test
+    void withdrawalReopensStudyClosedAutomaticallyByCapacity() throws Exception {
+        TestUsers users = createUsers("auto-reopen");
+        Long studyId = createStudy(users.hostToken(), "자동 마감 후 탈퇴", 2);
+        Long memberId = apply(studyId, users.applicantToken());
+        approve(studyId, memberId, users.hostToken());
+
+        assertThat(studyRepository.findById(studyId).orElseThrow().getStatus())
+                .isEqualTo(StudyStatus.CLOSED);
+
+        mockMvc.perform(delete("/api/studies/{studyId}/members/me/membership", studyId)
+                        .header("Authorization", "Bearer " + users.applicantToken()))
+                .andExpect(status().isOk());
+
+        Study reopenedStudy = studyRepository.findById(studyId).orElseThrow();
+        assertThat(reopenedStudy.getCurrentMemberCount()).isEqualTo(1);
+        assertThat(reopenedStudy.getStatus()).isEqualTo(StudyStatus.RECRUITING);
+        assertThat(reopenedStudy.isRecruitmentClosedManually()).isFalse();
+    }
+
+    @Test
+    void withdrawalKeepsManuallyClosedStudyClosed() throws Exception {
+        TestUsers users = createUsers("manual-close");
+        Long studyId = createStudy(users.hostToken(), "수동 마감 후 탈퇴", 4);
+        Long memberId = apply(studyId, users.applicantToken());
+        approve(studyId, memberId, users.hostToken());
+
+        mockMvc.perform(patch("/api/studies/{studyId}/close", studyId)
+                        .header("Authorization", "Bearer " + users.hostToken()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/studies/{studyId}/members/me/membership", studyId)
+                        .header("Authorization", "Bearer " + users.applicantToken()))
+                .andExpect(status().isOk());
+
+        Study closedStudy = studyRepository.findById(studyId).orElseThrow();
+        assertThat(closedStudy.getCurrentMemberCount()).isEqualTo(1);
+        assertThat(closedStudy.getStatus()).isEqualTo(StudyStatus.CLOSED);
+        assertThat(closedStudy.isRecruitmentClosedManually()).isTrue();
+    }
+
+    @Test
+    void cancellationAndWithdrawalRequireMatchingStatus() throws Exception {
+        TestUsers users = createUsers("invalid-exit");
+        Long studyId = createStudy(users.hostToken(), "잘못된 취소 탈퇴 차단", 4);
+        Long memberId = apply(studyId, users.applicantToken());
+
+        mockMvc.perform(delete("/api/studies/{studyId}/members/me/membership", studyId)
+                        .header("Authorization", "Bearer " + users.applicantToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("승인된 스터디 참여만 탈퇴할 수 있습니다."));
+
+        approve(studyId, memberId, users.hostToken());
+
+        mockMvc.perform(delete("/api/studies/{studyId}/members/me/application", studyId)
+                        .header("Authorization", "Bearer " + users.applicantToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("대기 중인 참여 신청만 취소할 수 있습니다."));
+    }
+
     private TestUsers createUsers(String prefix) throws Exception {
         String hostToken = signupAndLogin(prefix + "-host@example.com", prefix + "-host");
         String applicantToken = signupAndLogin(prefix + "-applicant@example.com", prefix + "-applicant");
@@ -176,6 +271,13 @@ class StudyMemberStatusTransitionIntegrationTest extends IntegrationTestSupport 
                 .andReturn();
 
         return jsonLong(applyResult, "$.data.id");
+    }
+
+    private void approve(Long studyId, Long memberId, String hostToken) throws Exception {
+        mockMvc.perform(patch("/api/studies/{studyId}/members/{memberId}/approve", studyId, memberId)
+                        .header("Authorization", "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
     }
 
     private void expectDuplicateApplication(Long studyId, String applicantToken) throws Exception {

@@ -48,7 +48,7 @@ class MySqlTestcontainersIntegrationTest extends IntegrationTestSupport {
     @Test
     void mysqlContainerAndFlywayMigrationAreReady() throws Exception {
         assertThat(MYSQL.isRunning()).isTrue();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
 
         try (Connection connection = dataSource.getConnection()) {
             assertThat(connection.getMetaData().getDatabaseProductName()).isEqualTo("MySQL");

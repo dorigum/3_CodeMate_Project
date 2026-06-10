@@ -1,0 +1,66 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: codemate-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${CODEMATE_DB_NAME:-codemate}
+      MYSQL_USER: ${CODEMATE_DB_USERNAME:-codemate}
+      MYSQL_PASSWORD: ${CODEMATE_DB_PASSWORD:?CODEMATE_DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: Asia/Seoul
+    volumes:
+      - codemate-mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - codemate-network
+
+  app:
+    image: ${DOCKER_IMAGE:?DOCKER_IMAGE is required}:${IMAGE_TAG:-latest}
+    container_name: codemate-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CODEMATE_DB_HOST: mysql
+      CODEMATE_DB_PORT: 3306
+      CODEMATE_DB_NAME: ${CODEMATE_DB_NAME:-codemate}
+      CODEMATE_DB_USERNAME: ${CODEMATE_DB_USERNAME:-codemate}
+      CODEMATE_DB_PASSWORD: ${CODEMATE_DB_PASSWORD:?CODEMATE_DB_PASSWORD is required}
+      CODEMATE_DB_USE_SSL: ${CODEMATE_DB_USE_SSL:-false}
+      CODEMATE_JWT_SECRET: ${CODEMATE_JWT_SECRET:?CODEMATE_JWT_SECRET is required}
+      CODEMATE_JWT_ACCESS_TOKEN_VALIDITY_MILLISECONDS: ${CODEMATE_JWT_ACCESS_TOKEN_VALIDITY_MILLISECONDS:-3600000}
+      CODEMATE_JWT_REFRESH_TOKEN_VALIDITY_MILLISECONDS: ${CODEMATE_JWT_REFRESH_TOKEN_VALIDITY_MILLISECONDS:-1209600000}
+      TZ: Asia/Seoul
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --silent http://localhost:8080/actuator/health | grep '\"status\":\"UP\"'"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - codemate-network
+
+networks:
+  codemate-network:
+    driver: bridge
+
+volumes:
+  codemate-mysql-data:

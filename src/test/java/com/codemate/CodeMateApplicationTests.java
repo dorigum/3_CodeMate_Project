@@ -60,7 +60,7 @@ class CodeMateApplicationTests {
 
     @Test
     void flywayMigrationIsApplied() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
     }
 
     @Test
@@ -89,6 +89,8 @@ class CodeMateApplicationTests {
                 .andExpect(jsonPath("$.paths['/api/studies'].get.parameters[*].name")
                         .value(not(hasItems("pageable"))))
                 .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/{memberId}/approve'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/me/application'].delete").exists())
+                .andExpect(jsonPath("$.paths['/api/studies/{studyId}/members/me/membership'].delete").exists())
                 .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.errors").exists())
                 .andExpect(jsonPath("$.components.schemas.SignupRequest.properties.email.description")
                         .value("로그인에 사용할 이메일"))

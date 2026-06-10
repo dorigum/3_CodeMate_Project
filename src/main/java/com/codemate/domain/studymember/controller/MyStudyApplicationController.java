@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/users/me/study-applications")
-@Tag(name = "Study Members", description = "스터디 참여 신청, 신청 목록, 승인·거절 API")
+@Tag(name = "Study Members", description = "스터디 참여 신청, 승인·거절, 신청 취소·탈퇴 API")
 @SecurityRequirement(name = OpenApiConfig.JWT_SECURITY_SCHEME)
 public class MyStudyApplicationController {
 

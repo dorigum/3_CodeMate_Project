@@ -103,6 +103,33 @@ public class StudyMemberService {
         return StudyMemberResponse.from(studyMember);
     }
 
+    @Transactional
+    public void cancelApplication(Long userId, Long studyId) {
+        User user = findUser(userId);
+        Study study = findStudyForUpdate(studyId);
+        StudyMember studyMember = findStudyMember(study, user);
+
+        if (!studyMember.isPending()) {
+            throw new BusinessException(ErrorCode.STUDY_APPLICATION_NOT_PENDING);
+        }
+
+        studyMemberRepository.delete(studyMember);
+    }
+
+    @Transactional
+    public void withdrawMembership(Long userId, Long studyId) {
+        User user = findUser(userId);
+        Study study = findStudyForUpdate(studyId);
+        StudyMember studyMember = findStudyMember(study, user);
+
+        if (!studyMember.isApproved()) {
+            throw new BusinessException(ErrorCode.STUDY_MEMBERSHIP_NOT_APPROVED);
+        }
+
+        studyMemberRepository.delete(studyMember);
+        study.decreaseCurrentMemberCount();
+    }
+
     private void validateStudyApplicable(User user, Study study) {
         if (study.isHostedBy(user.getId())) {
             throw new BusinessException(ErrorCode.CANNOT_APPLY_OWN_STUDY);
@@ -139,6 +166,16 @@ public class StudyMemberService {
     private StudyMember findStudyMember(Long memberId) {
         return studyMemberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_MEMBER_NOT_FOUND));
+    }
+
+    private StudyMember findStudyMember(Study study, User user) {
+        return studyMemberRepository.findByStudyAndUser(study, user)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDY_MEMBER_NOT_FOUND));
+    }
+
+    private User findUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     private void validateHost(Study study, Long userId) {

@@ -58,6 +58,9 @@ public class Study extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private StudyStatus status;
 
+    @Column(nullable = false)
+    private boolean recruitmentClosedManually;
+
     @Builder
     private Study(
             User host,
@@ -79,6 +82,7 @@ public class Study extends BaseTimeEntity {
         this.maxMemberCount = maxMemberCount;
         this.currentMemberCount = currentMemberCount;
         this.status = status;
+        this.recruitmentClosedManually = false;
     }
 
     public void update(
@@ -95,6 +99,7 @@ public class Study extends BaseTimeEntity {
         this.meetingType = meetingType;
         this.location = location;
         this.maxMemberCount = maxMemberCount;
+        synchronizeRecruitmentStatus();
     }
 
     public boolean isHostedBy(Long userId) {
@@ -114,10 +119,33 @@ public class Study extends BaseTimeEntity {
 
         if (isFull()) {
             this.status = StudyStatus.CLOSED;
+            this.recruitmentClosedManually = false;
         }
     }
 
     public void closeRecruitment() {
         this.status = StudyStatus.CLOSED;
+        this.recruitmentClosedManually = true;
+    }
+
+    public void decreaseCurrentMemberCount() {
+        if (currentMemberCount <= 1) {
+            throw new IllegalStateException("Study member count cannot be less than the host count");
+        }
+
+        this.currentMemberCount--;
+        synchronizeRecruitmentStatus();
+    }
+
+    private void synchronizeRecruitmentStatus() {
+        if (status == StudyStatus.RECRUITING && isFull()) {
+            this.status = StudyStatus.CLOSED;
+            this.recruitmentClosedManually = false;
+            return;
+        }
+
+        if (status == StudyStatus.CLOSED && !recruitmentClosedManually && !isFull()) {
+            this.status = StudyStatus.RECRUITING;
+        }
     }
 }
