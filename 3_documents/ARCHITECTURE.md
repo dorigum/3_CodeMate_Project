@@ -45,6 +45,58 @@ flowchart LR
 
 기본 포트는 `.env` 값에 따라 바꿀 수 있다. 애플리케이션 컨테이너는 MySQL health check가 성공한 뒤 시작한다.
 
+## AWS 운영 배포 구성
+
+```mermaid
+flowchart LR
+    Client["Postman / Web Client"]
+    Domain["polar-bear.o-r.kr"]
+    ALB["Application Load Balancer<br/>80 / 443"]
+    Target["Target Group<br/>HTTP 8080"]
+    EC2["EC2 Ubuntu"]
+    App["codemate-app :8080"]
+    MySQL[("codemate-mysql :3306")]
+    Volume[("Docker Named Volume")]
+
+    Client -->|HTTPS| Domain
+    Domain --> ALB
+    ALB --> Target
+    Target --> EC2
+    EC2 --> App
+    App -->|Docker 내부 네트워크| MySQL
+    MySQL --> Volume
+```
+
+1. HTTP `80` 요청은 ALB에서 HTTPS `443`으로 리다이렉트한다.
+2. ACM 인증서를 적용한 ALB가 TLS를 종료한다.
+3. ALB는 Target Group을 통해 EC2의 애플리케이션 `8080` 포트로 전달한다.
+4. EC2 `8080` 인바운드는 ALB 보안 그룹만 허용한다.
+5. MySQL `3306`은 외부에 공개하지 않고 Docker 내부에서만 사용한다.
+6. ALB는 `/actuator/health`의 `200` 응답으로 대상 상태를 확인한다.
+
+## 운영 배포 흐름
+
+```mermaid
+sequenceDiagram
+    actor Developer
+    participant GitHub
+    participant Actions as GitHub Actions
+    participant Hub as Docker Hub
+    participant EC2
+
+    Developer->>GitHub: Push 또는 수동 CD 실행
+    GitHub->>Actions: Workflow 시작
+    Actions->>Actions: Maven 검증과 Docker Build
+    Actions->>Hub: SHA / latest 이미지 Push
+    Actions->>EC2: Compose와 .env.prod 전송
+    EC2->>Hub: 새 이미지 Pull
+    EC2->>EC2: app 컨테이너 교체
+    Actions->>EC2: Actuator Health Check
+    EC2-->>Actions: status UP
+```
+
+MySQL 컨테이너와 named volume은 애플리케이션 재배포 시 유지한다. 상세 설정은 [AWS 배포 문서](AWS_DEPLOYMENT.md)에서 확인한다.
+
 ## 애플리케이션 계층
 
 | 계층 | 책임 |
@@ -171,3 +223,5 @@ sequenceDiagram
 3. Refresh Token 원문은 DB에 저장하지 않고 SHA-256 해시를 저장한다.
 4. 로그아웃과 비밀번호 변경은 사용자 `tokenVersion`을 증가시켜 기존 Access Token을 무효화한다.
 5. 운영 프로필에서는 Swagger, OpenAPI JSON과 H2 Console을 노출하지 않는다.
+6. 외부 HTTPS는 ALB에서 종료하고 EC2 애플리케이션 포트는 ALB 보안 그룹에만 허용한다.
+7. 운영 MySQL은 호스트 포트를 공개하지 않고 Docker 내부 네트워크에서만 접근한다.

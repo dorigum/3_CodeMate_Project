@@ -28,7 +28,7 @@ CodeMate는 스터디와 모각코(모여서 각자 코딩) 모집을 위한 백
 - Docker 실행 환경
 
 ### 개발 진행 상황(2026.06.10)
-현재까지는 프로젝트 구조 정리, 엔티티/enum 설계, Repository 뼈대, H2/JPA 설정, 공통 응답/예외 처리, 회원가입 API까지 구현
+회원·JWT·Study·참여 관리 기능, 자동화 테스트, Flyway, Docker, CI/CD와 AWS HTTPS 운영 배포까지 완료
 
 
 ---
@@ -45,11 +45,10 @@ CodeMate는 스터디와 모각코(모여서 각자 코딩) 모집을 위한 백
 - Lombok
 
 ### Database
-- 개발 단계: H2 Database
-- 운영/실행 단계 후보: MySQL
-
-- 현재는 빠른 개발과 테스트를 위해 H2 인메모리 DB를 사용
-- MySQL 드라이버는 이미 의존성에 포함되어 있으므로, 이후 `local`, `mysql` 같은 프로필을 나눠 설정을 추가하면 MySQL로 전환 가능
+- 로컬 개발: H2 Database
+- 통합·운영: MySQL 8.4
+- Schema 관리: Flyway V1~V3
+- 운영 영속성: Docker named volume
 
 ### Build
 - Maven
@@ -61,10 +60,12 @@ CodeMate는 스터디와 모각코(모여서 각자 코딩) 모집을 위한 백
 - MockMvc
 - Spring Security Test
 
-### 향후 예정
-- JWT: jjwt 계열 의존성 추가 예정
-- API Docs: springdoc-openapi Swagger UI 추가 예정
-- DevOps: Docker, Docker Compose, AWS EC2 배포 예정
+### DevOps
+- Docker, Docker Compose
+- GitHub Actions CI/CD
+- Docker Hub
+- AWS EC2, ALB, ACM
+- `polar-bear.o-r.kr` HTTPS 도메인
 
 
 ---
@@ -502,7 +503,8 @@ Postman 요청 Body:
 - [시스템 아키텍처](ARCHITECTURE.md): 실행 구성, 계층 구조, JWT와 동시성 흐름
 - [데이터베이스 설계](DATABASE_DESIGN.md): Mermaid ERD, 테이블과 Flyway 정의
 - [CodeMate 실행 가이드](CodeMate_실행_가이드.md): 로컬·API·MySQL·Docker·CI 실행 방법
-- [프로젝트 회고](RETROSPECTIVE.md): 개발 회고 초안과 배포 후 작성 항목
+- [AWS 배포](AWS_DEPLOYMENT.md): EC2·Docker Hub·CD·ALB·ACM·HTTPS 구성과 검증
+- [프로젝트 회고](RETROSPECTIVE.md): 개발과 배포 과정 회고
 
 ## 현재 단계
 
@@ -510,7 +512,9 @@ Postman 요청 Body:
 2. H2/MySQL Flyway V1~V3 구성 완료
 3. Docker Compose와 GitHub Actions CI 구성 완료
 4. API·통합·도메인 단위 테스트 구성
-5. AWS 배포 환경 구성 예정
+5. GitHub Actions CD와 Docker Hub 이미지 배포 완료
+6. AWS EC2·ALB·ACM·도메인 HTTPS 배포 완료
+7. Postman 운영 API 및 MySQL 데이터 영속성 검증 완료
 
 
 ---

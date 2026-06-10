@@ -17,6 +17,14 @@ Postman에서 `CodeMate Local` 환경을 만들고 아래 변수를 등록한다
 | `studyId`     | 비워두기                    | 생성된 스터디 ID 저장   |
 | `memberId`    | 비워두기                    | 생성된 참여 신청 ID 저장 |
 
+운영 배포를 테스트할 때는 별도의 `CodeMate Production` 환경을 만들고 `baseUrl`만 다음 값으로 변경한다.
+
+```text
+https://polar-bear.o-r.kr
+```
+
+운영 환경에서는 Swagger UI가 비활성화되어 있으므로 Postman 요청을 사용한다.
+
 ### 공통 Header
 
 JSON Body를 보내는 요청에는 아래 Header를 추가한다.
@@ -30,6 +38,52 @@ Content-Type: application/json
 ```text
 Authorization: Bearer {{accessToken}}
 ```
+
+---
+
+## AWS 운영 API Smoke Test
+
+### 1. Health Check
+
+```http
+GET https://polar-bear.o-r.kr/actuator/health
+```
+
+`200 OK`와 `status: UP`을 확인한다.
+
+### 2. 회원가입
+
+```http
+POST {{baseUrl}}/api/users/signup
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "production-test@example.com",
+  "password": "password123",
+  "nickname": "production-test",
+  "mainTechStack": "Spring Boot"
+}
+```
+
+회원가입이 성공하면 운영 도메인, ALB, EC2 애플리케이션과 MySQL 저장 경로가 연결된 상태이다. 같은 이메일을 반복 사용하면 중복 오류가 발생하므로 테스트마다 이메일을 변경한다.
+
+### 3. 인증 흐름
+
+1. 로그인 API로 Access Token을 발급한다.
+2. Postman 환경의 `accessToken` 변수에 저장한다.
+3. 인증이 필요한 요청에 `Authorization: Bearer {{accessToken}}`을 추가한다.
+4. 내 정보 조회, 모집 글 생성과 참여 관리 API를 순서대로 확인한다.
+
+### 4. 데이터 영속성
+
+1. 운영 API로 회원 또는 모집 글을 생성한다.
+2. EC2에서 애플리케이션 컨테이너를 재시작한다.
+3. 로그인 후 기존 데이터를 다시 조회한다.
+4. 데이터가 유지되면 MySQL named volume의 영속성이 정상이다.
+
+운영 배포 명령과 AWS 구성은 [AWS 배포 문서](../AWS_DEPLOYMENT.md)를 참고한다.
 
 ---
 

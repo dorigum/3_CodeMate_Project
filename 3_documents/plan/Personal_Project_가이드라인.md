@@ -93,19 +93,19 @@ Spring Boot + Security + JPA + MySQL 기반으로 완성해보세요.
 
 | 단계 | 상태 | 관련 문서 또는 구현 |
 |---|---|---|
-| 프로젝트 개요 | 완료 | [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) |
-| 요구사항 분석 | 완료 | [PROJECT_SPECIFICATION.md](PROJECT_SPECIFICATION.md) |
-| 기술 스택 | 완료 | [README.md](../README.md), [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) |
-| 시스템 아키텍처 | 완료 | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| 데이터베이스 설계 | 완료 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) |
-| API 설계 | 완료 | [PROJECT_SPECIFICATION.md](PROJECT_SPECIFICATION.md), Swagger UI |
-| 프로젝트 구조 | 완료 | [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) |
+| 프로젝트 개요 | 완료 | [PROJECT_OVERVIEW.md](../PROJECT_OVERVIEW.md) |
+| 요구사항 분석 | 완료 | [PROJECT_SPECIFICATION.md](../PROJECT_SPECIFICATION.md) |
+| 기술 스택 | 완료 | [README.md](../../README.md), [PROJECT_OVERVIEW.md](../PROJECT_OVERVIEW.md) |
+| 시스템 아키텍처 | 완료 | [ARCHITECTURE.md](../ARCHITECTURE.md) |
+| 데이터베이스 설계 | 완료 | [DATABASE_DESIGN.md](../DATABASE_DESIGN.md) |
+| API 설계 | 완료 | [PROJECT_SPECIFICATION.md](../PROJECT_SPECIFICATION.md), Swagger UI |
+| 프로젝트 구조 | 완료 | [PROJECT_OVERVIEW.md](../PROJECT_OVERVIEW.md) |
 | 회원 인증 및 인가 | 완료 | Spring Security, JWT, Refresh Token |
 | 핵심 비즈니스 기능 | 완료 | Study CRUD, 검색, 페이징, 참여 관리 |
 | JPA 활용 | 완료 | 연관관계, Lazy Loading, Specification, Query Method |
 | 테스트 | 완료 | 도메인 단위·API·통합·Testcontainers 테스트 74개 |
 | API 문서화 | 완료 | Swagger/OpenAPI |
 | Docker 적용 | 완료 | Dockerfile, Docker Compose |
-| 배포 | 예정 | AWS 배포 환경 구성 |
-| 트러블슈팅 | 완료 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| 프로젝트 회고 | 초안 | [RETROSPECTIVE.md](RETROSPECTIVE.md), 배포 후 최종 작성 |
+| 배포 | 완료 | [AWS_DEPLOYMENT.md](../AWS_DEPLOYMENT.md), EC2·ALB·ACM·도메인 HTTPS |
+| 트러블슈팅 | 완료 | [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) |
+| 프로젝트 회고 | 완료 | [RETROSPECTIVE.md](../RETROSPECTIVE.md) |

@@ -1,6 +1,6 @@
-# CodeMate 운영 환경과 CI
+# CodeMate 운영 환경과 CI/CD
 
-운영용 프로필, 보안 환경변수와 GitHub Actions CI 사용 방법을 정리한다.
+운영용 프로필, 보안 환경변수와 GitHub Actions CI/CD 사용 방법을 정리한다.
 
 [실행 가이드 목차](../CodeMate_실행_가이드.md)로 돌아가기
 
@@ -146,3 +146,49 @@ docker build -t codemate:local-check .
 2. `.env` 및 운영 Secret을 워크플로에 직접 작성하지 않음.
 3. H2 인메모리 DB를 사용하므로 DB 비밀번호 Secret이 필요하지 않음.
 4. Docker 이미지는 빌드만 하며 외부 Registry에 Push하지 않음.
+
+---
+
+## GitHub Actions CD
+
+### 실행 조건
+
+1. GitHub Actions의 `Build, Push and Deploy` Workflow를 수동 실행한다.
+2. 운영 EC2와 GitHub Secrets가 준비된 상태에서 실행한다.
+3. 배포할 Commit을 선택해 Docker 이미지 태그와 실행 코드를 일치시킨다.
+
+### 필요한 Secrets
+
+```text
+DOCKERHUB_USERNAME
+DOCKERHUB_TOKEN
+EC2_HOST
+EC2_USERNAME
+EC2_SSH_KEY
+CODEMATE_DB_PASSWORD
+MYSQL_ROOT_PASSWORD
+CODEMATE_JWT_SECRET
+```
+
+비밀번호, SSH Private Key와 JWT Secret은 문서, Workflow YAML 또는 저장소에 직접 기록하지 않는다.
+
+### CD 작업
+
+1. Docker Buildx로 애플리케이션 이미지를 생성한다.
+2. Docker Hub에 Commit SHA와 `latest` 태그를 Push한다.
+3. GitHub Secrets로 `.env.prod`를 생성한다.
+4. `compose.prod.yaml`과 `.env.prod`를 EC2 `~/codemate`에 전송한다.
+5. EC2에서 새 이미지를 Pull한다.
+6. MySQL과 named volume은 유지하고 애플리케이션 컨테이너를 교체한다.
+7. `/actuator/health`가 `UP`인지 확인한다.
+
+### 배포 완료 확인
+
+1. GitHub Actions의 전체 Job이 성공인지 확인한다.
+2. Docker Hub에 SHA와 `latest` 태그가 있는지 확인한다.
+3. EC2에서 `docker compose ps`로 컨테이너 상태를 확인한다.
+4. `https://polar-bear.o-r.kr/actuator/health`가 `UP`인지 확인한다.
+5. Postman에서 운영 API를 실행한다.
+6. 애플리케이션 재시작 후 기존 데이터가 유지되는지 확인한다.
+
+AWS 리소스, 보안 그룹, ALB, ACM과 도메인 설정은 [AWS 배포 문서](../AWS_DEPLOYMENT.md)를 참고한다.

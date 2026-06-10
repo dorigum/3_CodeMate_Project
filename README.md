@@ -45,6 +45,7 @@
 | Build | Maven, Maven Wrapper |
 | Test | JUnit 5, MockMvc, Spring Security Test, Testcontainers |
 | API Docs | springdoc-openapi, Swagger UI |
+| DevOps | Docker, Docker Compose, GitHub Actions, Docker Hub, AWS EC2, ALB, ACM |
 
 ## 주요 도메인
 
@@ -239,6 +240,17 @@ JWT 인증이 필요한 API 테스트 순서:
 
 `Bearer ` 접두사는 Swagger UI가 자동으로 추가하므로 access token 값만 입력합니다.
 
+## AWS 운영 배포
+
+- 운영 도메인: `https://polar-bear.o-r.kr`
+- Health Check: `https://polar-bear.o-r.kr/actuator/health`
+- 배포 구성: GitHub Actions → Docker Hub → EC2 Docker Compose
+- 외부 통신: ACM 인증서가 적용된 ALB HTTPS `443`
+- 애플리케이션 연결: ALB Target Group → EC2 `8080`
+- 데이터베이스: EC2 Docker 내부 MySQL 8.4와 named volume
+
+운영 `prod` 프로필에서는 Swagger UI가 비활성화됩니다. Postman에서 `https://polar-bear.o-r.kr/api`를 Base URL로 사용해 운영 API를 확인합니다.
+
 ## 대표 API
 
 | Method | Endpoint | 설명 | 인증 |
@@ -295,12 +307,14 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 - [트러블슈팅](3_documents/TROUBLESHOOTING.md)
 - [CodeMate 실행 가이드](3_documents/CodeMate_실행_가이드.md)
 - [프로젝트 회고](3_documents/RETROSPECTIVE.md)
-- [백엔드 프로젝트 기획](3_documents/Backend_Project_기획.md)
+- [AWS 배포 구성과 검증](3_documents/AWS_DEPLOYMENT.md)
+- [백엔드 프로젝트 기획](3_documents/plan/Backend_Project_기획.md)
 
 ## 향후 계획
 
-- AWS 배포 환경 구성
-- 배포 환경 모니터링 및 운영 점검
+- CloudWatch 기반 로그·지표 모니터링
+- 배포 실패 자동 Rollback과 운영 Smoke Test
+- Terraform 기반 AWS 인프라 코드화
 
 ---
 *Updated at_2026.06.10*
