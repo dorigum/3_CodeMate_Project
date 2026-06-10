@@ -31,6 +31,13 @@
 - 해결 결과: Target Group `8080`, `/actuator/health`, ALB 보안 그룹 연결 후 `Healthy`
 - 상세 기록: [2026-06-10 개발 로그](project-log/2026-06-10.md)
 
+## GitHub Actions Docker Buildx 타임아웃 트러블슈팅
+
+- 발생일: 2026-06-10
+- 주요 문제: `Set up Docker Buildx` 단계에서 Docker Hub Registry 연결 중 네트워크 타임아웃 발생 (Client.Timeout exceeded)
+- 해결 결과: Docker Hub 진영의 일시적인 네트워크 세션 불안정으로 판단하여 GitHub Actions Job 재실행(Re-run)을 통해 정상 배포 완료
+- 상세 기록: [2026-06-10 개발 로그](project-log/2026-06-10.md)
+
 ## 테스트 및 운영 점검
 
 - 로컬·Docker·MySQL 실행 문제는 [CodeMate 실행 가이드](guides/CodeMate_실행_가이드.md)에서 확인한다.
