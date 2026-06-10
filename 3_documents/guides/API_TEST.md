@@ -2,7 +2,7 @@
 
 Swagger와 Postman을 사용한 회원, 인증, 스터디 및 참여 기능 테스트 절차를 정리한다.
 
-[실행 가이드 목차](../CodeMate_실행_가이드.md)로 돌아가기
+[실행 가이드 목차](CodeMate_실행_가이드.md)로 돌아가기
 
 ## Postman 기본 설정
 
@@ -83,7 +83,7 @@ Content-Type: application/json
 3. 로그인 후 기존 데이터를 다시 조회한다.
 4. 데이터가 유지되면 MySQL named volume의 영속성이 정상이다.
 
-운영 배포 명령과 AWS 구성은 [AWS 배포 문서](../AWS_DEPLOYMENT.md)를 참고한다.
+운영 배포 명령과 AWS 구성은 [AWS 배포 문서](../info/AWS_DEPLOYMENT.md)를 참고한다.
 
 ---
 
@@ -297,14 +297,14 @@ GET {{baseUrl}}/api/studies?category=STUDY&status=RECRUITING&page=0&size=10
 ### 복합 검색
 
 ```http
-GET {{baseUrl}}/api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
+GET {{baseUrl}}/api/studies?keyword=백엔드&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
 ```
 
 사용 가능한 검색 조건:
 
 | 조건 | 설명 | 예시 |
 |---|---|---|
-| `keyword` | 제목 또는 내용 부분 검색 | `코루틴` |
+| `keyword` | 제목 또는 내용 부분 검색 | `백엔드` |
 | `category` | 모집 글 분류 | `STUDY`, `MOGAKKO` |
 | `status` | 모집 상태 | `RECRUITING`, `CLOSED`, `IN_PROGRESS`, `FINISHED` |
 | `meetingType` | 진행 방식 | `ONLINE`, `OFFLINE` |

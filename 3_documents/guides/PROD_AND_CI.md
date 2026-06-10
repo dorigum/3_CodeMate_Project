@@ -2,7 +2,7 @@
 
 운영용 프로필, 보안 환경변수와 GitHub Actions CI/CD 사용 방법을 정리한다.
 
-[실행 가이드 목차](../CodeMate_실행_가이드.md)로 돌아가기
+[실행 가이드 목차](CodeMate_실행_가이드.md)로 돌아가기
 
 ## 운영용 prod 프로필
 
@@ -191,4 +191,4 @@ CODEMATE_JWT_SECRET
 5. Postman에서 운영 API를 실행한다.
 6. 애플리케이션 재시작 후 기존 데이터가 유지되는지 확인한다.
 
-AWS 리소스, 보안 그룹, ALB, ACM과 도메인 설정은 [AWS 배포 문서](../AWS_DEPLOYMENT.md)를 참고한다.
+AWS 리소스, 보안 그룹, ALB, ACM과 도메인 설정은 [AWS 배포 문서](../info/AWS_DEPLOYMENT.md)를 참고한다.

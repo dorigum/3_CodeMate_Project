@@ -34,12 +34,12 @@ docker compose ps
 
 ## 상세 가이드
 
-- [로컬 서버 실행](guides/LOCAL_SERVER.md): H2, 서버, Swagger, H2 Console
-- [API 테스트](guides/API_TEST.md): Swagger/Postman, JWT, Study CRUD, 참여 상태
-- [데이터베이스 테스트](guides/DATABASE.md): MySQL, Flyway, Testcontainers, 자동화 테스트
-- [Docker 실행](guides/DOCKER.md): Docker Compose 실행과 데이터 영속성
-- [운영 환경과 CI](guides/PROD_AND_CI.md): prod 프로필, 환경변수, GitHub Actions
-- [AWS 배포](AWS_DEPLOYMENT.md): EC2, Docker Hub, CD, ALB, ACM, 도메인과 HTTPS
+- [로컬 서버 실행](LOCAL_SERVER.md): H2, 서버, Swagger, H2 Console
+- [API 테스트](API_TEST.md): Swagger/Postman, JWT, Study CRUD, 참여 상태
+- [데이터베이스 테스트](DATABASE.md): MySQL, Flyway, Testcontainers, 자동화 테스트
+- [Docker 실행](DOCKER.md): Docker Compose 실행과 데이터 영속성
+- [운영 환경과 CI](PROD_AND_CI.md): prod 프로필, 환경변수, GitHub Actions
+- [AWS 배포](../info/AWS_DEPLOYMENT.md): EC2, Docker Hub, CD, ALB, ACM, 도메인과 HTTPS
 
 ## 권장 확인 순서
 

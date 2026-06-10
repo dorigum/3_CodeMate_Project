@@ -285,7 +285,7 @@ Authorization: Bearer {accessToken}
 스터디 목록은 검색 조건을 자유롭게 조합할 수 있습니다.
 
 ```http
-GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
+GET /api/studies?keyword=백엔드&category=STUDY&status=RECRUITING&meetingType=OFFLINE&location=판교&techStack=Kotlin&page=0&size=10
 ```
 
 지원 조건:
@@ -299,15 +299,15 @@ GET /api/studies?keyword=코루틴&category=STUDY&status=RECRUITING&meetingType=
 
 ## 문서
 
-- [프로젝트 개요](3_documents/PROJECT_OVERVIEW.md)
-- [프로젝트 명세](3_documents/PROJECT_SPECIFICATION.md)
-- [시스템 아키텍처](3_documents/ARCHITECTURE.md)
-- [데이터베이스 설계](3_documents/DATABASE_DESIGN.md)
+- [프로젝트 개요](3_documents/info/PROJECT_OVERVIEW.md)
+- [프로젝트 명세](3_documents/info/PROJECT_SPECIFICATION.md)
+- [시스템 아키텍처](3_documents/info/ARCHITECTURE.md)
+- [데이터베이스 설계](3_documents/info/DATABASE_DESIGN.md)
 - [프로젝트 개발 기록](3_documents/PROJECT_LOG.md)
 - [트러블슈팅](3_documents/TROUBLESHOOTING.md)
-- [CodeMate 실행 가이드](3_documents/CodeMate_실행_가이드.md)
-- [프로젝트 회고](3_documents/RETROSPECTIVE.md)
-- [AWS 배포 구성과 검증](3_documents/AWS_DEPLOYMENT.md)
+- [CodeMate 실행 가이드](3_documents/guides/CodeMate_실행_가이드.md)
+- [프로젝트 회고](3_documents/info/RETROSPECTIVE.md)
+- [AWS 배포 구성과 검증](3_documents/info/AWS_DEPLOYMENT.md)
 - [백엔드 프로젝트 기획](3_documents/plan/Backend_Project_기획.md)
 
 ## 향후 계획

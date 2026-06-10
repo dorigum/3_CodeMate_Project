@@ -2,7 +2,7 @@
 
 Docker Compose 기반 애플리케이션과 MySQL 실행 및 점검 방법을 정리한다.
 
-[실행 가이드 목차](../CodeMate_실행_가이드.md)로 돌아가기
+[실행 가이드 목차](CodeMate_실행_가이드.md)로 돌아가기
 
 ## Docker Compose 서버 테스트
 

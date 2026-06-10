@@ -22,7 +22,7 @@
 - 발생일: 2026-06-10
 - 주요 문제: Docker Socket 권한, Docker Hub 이미지 경로, 컨테이너 이름 충돌, GitHub Hosted Runner SSH 접근
 - 상세 기록: [2026-06-10 개발 로그](project-log/2026-06-10.md)
-- 재현 가능한 배포 절차: [AWS 배포 문서](AWS_DEPLOYMENT.md)
+- 재현 가능한 배포 절차: [AWS 배포 문서](info/AWS_DEPLOYMENT.md)
 
 ## ALB, Target Group 및 HTTPS 트러블슈팅
 
@@ -33,6 +33,6 @@
 
 ## 테스트 및 운영 점검
 
-- 로컬·Docker·MySQL 실행 문제는 [CodeMate 실행 가이드](CodeMate_실행_가이드.md)에서 확인한다.
-- AWS, 도메인, HTTPS와 CD 문제는 [AWS 배포 문서](AWS_DEPLOYMENT.md)에서 확인한다.
+- 로컬·Docker·MySQL 실행 문제는 [CodeMate 실행 가이드](guides/CodeMate_실행_가이드.md)에서 확인한다.
+- AWS, 도메인, HTTPS와 CD 문제는 [AWS 배포 문서](info/AWS_DEPLOYMENT.md)에서 확인한다.
 - 새로운 장애 기록은 해당 날짜의 개발 로그에 먼저 작성하고 이 문서에 링크를 추가한다.

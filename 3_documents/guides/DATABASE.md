@@ -2,7 +2,7 @@
 
 MySQL, Flyway, Testcontainers와 자동화 테스트 실행 방법을 정리한다.
 
-[실행 가이드 목차](../CodeMate_실행_가이드.md)로 돌아가기
+[실행 가이드 목차](CodeMate_실행_가이드.md)로 돌아가기
 
 ## MySQL 연결 및 데이터 영속성 테스트
 

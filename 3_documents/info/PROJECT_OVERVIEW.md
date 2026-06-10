@@ -502,7 +502,7 @@ Postman 요청 Body:
 - [프로젝트 명세](PROJECT_SPECIFICATION.md): 기능·비기능 요구사항과 API 규칙
 - [시스템 아키텍처](ARCHITECTURE.md): 실행 구성, 계층 구조, JWT와 동시성 흐름
 - [데이터베이스 설계](DATABASE_DESIGN.md): Mermaid ERD, 테이블과 Flyway 정의
-- [CodeMate 실행 가이드](CodeMate_실행_가이드.md): 로컬·API·MySQL·Docker·CI 실행 방법
+- [CodeMate 실행 가이드](../guides/CodeMate_실행_가이드.md): 로컬·API·MySQL·Docker·CI 실행 방법
 - [AWS 배포](AWS_DEPLOYMENT.md): EC2·Docker Hub·CD·ALB·ACM·HTTPS 구성과 검증
 - [프로젝트 회고](RETROSPECTIVE.md): 개발과 배포 과정 회고
 
